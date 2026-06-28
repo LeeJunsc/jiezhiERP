@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>JiezhiERP 低保真原型</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">JZ</div>
+          <div>
+            <strong>JiezhiERP</strong>
+            <span>定制电商后台</span>
+          </div>
+        </div>
+        <nav class="nav" aria-label="主导航">
+          <button class="nav-item active" data-screen="dashboard">工作台</button>
+          <button class="nav-item" data-screen="orders">订单列表</button>
+          <button class="nav-item" data-screen="new-order">新建订单</button>
+          <button class="nav-item" data-screen="order-detail">订单详情</button>
+          <button class="nav-item" data-screen="design">设计任务</button>
+          <button class="nav-item" data-screen="production">生产安排</button>
+          <button class="nav-item" data-screen="customers">客户管理</button>
+          <button class="nav-item" data-screen="invoice">发票审批</button>
+          <button class="nav-item" data-screen="payment">付款申请</button>
+          <button class="nav-item" data-screen="after-sales">售后申请</button>
+          <button class="nav-item" data-screen="users">用户权限</button>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">低保真流程原型</p>
+            <h1 id="screen-title">工作台</h1>
+          </div>
+          <div class="top-actions">
+            <button class="ghost-btn" data-screen-link="orders">查订单</button>
+            <button class="primary-btn" data-screen-link="new-order">新建订单</button>
+          </div>
+        </header>
+
+        <section class="screen active" id="dashboard">
+          <div class="metrics">
+            <article class="metric accent-blue">
+              <span>今日新增</span>
+              <strong>18</strong>
+              <small>销售录入订单</small>
+            </article>
+            <article class="metric accent-amber">
+              <span>待设计</span>
+              <strong>26</strong>
+              <small>需要设计处理</small>
+            </article>
+            <article class="metric accent-green">
+              <span>待安排</span>
+              <strong>42</strong>
+              <small>工厂代工安排</small>
+            </article>
+            <article class="metric accent-red">
+              <span>待售后</span>
+              <strong>7</strong>
+              <small>客户问题待处理</small>
+            </article>
+          </div>
+
+          <div class="two-column">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>订单主流程</h2>
+                <button class="small-btn" data-screen-link="order-detail">看示例</button>
+              </div>
+              <div class="flow-line">
+                <span class="done">录单</span>
+                <span class="done">提交</span>
+                <span class="current">设计选项</span>
+                <span>设计/跳过</span>
+                <span>生产安排</span>
+                <span>完成</span>
+                <span>售后</span>
+              </div>
+              <p class="muted">订单提交时选择可自定义的设计处理方式，再决定是否生成设计任务。</p>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>我的待办</h2>
+              </div>
+              <ul class="task-list">
+                <li><span>设计稿待确认</span><b>6</b></li>
+                <li><span>生产安排待确认</span><b>11</b></li>
+                <li><span>发票待审批</span><b>4</b></li>
+                <li><span>售后待受理</span><b>7</b></li>
+              </ul>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>最近订单</h2>
+              <button class="small-btn" data-screen-link="orders">进入列表</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>订单号</th>
+                    <th>店铺</th>
+                    <th>客户</th>
+                    <th>状态</th>
+                    <th>交付日期</th>
+                    <th>负责人</th>
+                  </tr>
+                </thead>
+                <tbody id="recent-orders"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="orders">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>筛选订单</h2>
+              <button class="primary-btn" data-screen-link="new-order">新建</button>
+            </div>
+            <div class="filters">
+              <input placeholder="订单号 / 客户 / 手机号">
+              <select>
+                <option>全部店铺</option>
+                <option>淘宝旗舰店</option>
+                <option>抖音定制店</option>
+                <option>小红书买手店</option>
+              </select>
+              <select>
+                <option>全部状态</option>
+                <option>已提交</option>
+                <option>待设计</option>
+                <option>设计中</option>
+                <option>待生产安排</option>
+                <option>已完成</option>
+              </select>
+              <input type="date">
+              <button class="ghost-btn">查询</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>订单号</th>
+                    <th>店铺</th>
+                    <th>客户</th>
+                    <th>金额</th>
+                    <th>状态</th>
+                    <th>设计选项</th>
+                    <th>设计</th>
+                    <th>生产安排</th>
+                    <th>交付</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="orders-table"></tbody>
+              </table>
+            </div>
+            <div class="pagination">
+              <span>每页 20 条</span>
+              <button class="small-btn">上一页</button>
+              <button class="small-btn">下一页</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="new-order">
+          <form class="panel form-panel">
+            <div class="panel-head">
+              <h2>新建订单</h2>
+              <div class="button-row">
+                <button class="ghost-btn" type="button">保存草稿</button>
+                <button class="primary-btn" type="button">提交订单</button>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label>店铺<select><option>淘宝旗舰店</option><option>抖音定制店</option></select></label>
+              <label>客户<input value="陈女士"></label>
+              <label>平台订单号<input placeholder="手工录入"></label>
+              <label>销售负责人<input value="李销售"></label>
+              <label>设计处理方式<select><option>新订单需要设计</option><option>老订单修改</option><option>仅标注</option><option>续订无需设计</option></select></label>
+              <label>商品名称<input value="定制亚克力展示架"></label>
+              <label>数量<input type="number" value="20"></label>
+              <label>订单金额<input value="2680.00"></label>
+              <label>交付日期<input type="date"></label>
+              <label class="wide">定制说明<textarea>尺寸 30x20cm，透明材质，LOGO 丝印，客户提供参考图。</textarea></label>
+              <label class="wide">内部备注<textarea>客户较急，设计确认后优先确认生产安排。</textarea></label>
+            </div>
+          </form>
+        </section>
+
+        <section class="screen" id="order-detail">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>订单 JZ20260628001</h2>
+              <div class="button-row">
+                <button class="ghost-btn">取消订单</button>
+                <button class="primary-btn" data-screen-link="design">查看设计</button>
+              </div>
+            </div>
+            <div class="status-strip">
+              <span class="done">草稿</span>
+              <span class="done">已提交</span>
+              <span class="done">新订单需要设计</span>
+              <span class="current">设计中</span>
+              <span>待生产安排</span>
+              <span>完成</span>
+            </div>
+            <div class="detail-grid">
+              <div><b>店铺</b><span>淘宝旗舰店</span></div>
+              <div><b>客户</b><span>陈女士 / 138****5021</span></div>
+              <div><b>金额</b><span>2680.00</span></div>
+              <div><b>交付日期</b><span>2026-07-05</span></div>
+              <div><b>销售</b><span>李销售</span></div>
+              <div><b>加急</b><span>是</span></div>
+              <div><b>设计处理方式</b><span>新订单需要设计</span></div>
+            </div>
+          </section>
+
+          <div class="two-column">
+            <section class="panel">
+              <h2>定制需求</h2>
+              <p>透明亚克力展示架，LOGO 丝印，客户提供参考图，需先出设计稿确认。</p>
+            </section>
+            <section class="panel">
+              <h2>操作日志</h2>
+              <ul class="timeline">
+                <li><b>12:18</b> 销售提交订单</li>
+                <li><b>12:21</b> 系统按“新订单需要设计”生成设计任务</li>
+                <li><b>13:10</b> 设计领取任务</li>
+              </ul>
+            </section>
+          </div>
+        </section>
+
+        <section class="screen" id="design">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>设计任务</h2>
+              <button class="ghost-btn">只看我的</button>
+            </div>
+            <div class="kanban">
+              <div>
+                <h3>待领取</h3>
+                <article>JZD20260628008<br><small>亚克力展示架</small></article>
+                <article>JZD20260628009<br><small>定制礼盒</small></article>
+              </div>
+              <div>
+                <h3>设计中</h3>
+                <article>JZD20260628001<br><small>陈女士 - 今日截止</small></article>
+              </div>
+              <div>
+                <h3>待确认</h3>
+                <article>JZD20260627018<br><small>客户待回复</small></article>
+              </div>
+              <div>
+                <h3>已确认</h3>
+                <article>JZD20260627011<br><small>进入生产安排</small></article>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="production">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>生产安排</h2>
+              <button class="ghost-btn">安排视图</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>安排号</th>
+                    <th>订单</th>
+                    <th>商品</th>
+                    <th>状态</th>
+                    <th>代工工厂</th>
+                    <th>计划交付</th>
+                    <th>负责人</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>JZP20260628001</td><td>JZ20260628001</td><td>展示架</td><td><span class="tag blue">待安排</span></td><td>华东代工厂</td><td>2026-07-05</td><td>王生产</td></tr>
+                  <tr><td>JZP20260627012</td><td>JZ20260627012</td><td>礼盒</td><td><span class="tag green">已确认</span></td><td>启明工厂</td><td>2026-07-02</td><td>赵生产</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="customers">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>客户管理</h2>
+              <button class="primary-btn">新建客户</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>客户</th><th>手机</th><th>最近订单</th><th>开票信息</th><th>备注</th></tr></thead>
+                <tbody>
+                  <tr><td>陈女士</td><td>138****5021</td><td>JZ20260628001</td><td>已维护</td><td>重视交期</td></tr>
+                  <tr><td>明辰贸易</td><td>021-****8899</td><td>JZ20260627012</td><td>专票</td><td>长期客户</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="invoice">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>发票审批</h2>
+              <button class="ghost-btn">待审批</button>
+            </div>
+            <div class="approval-list">
+              <article><b>INV20260628001</b><span>陈女士 - 普票 - 2680.00</span><button class="small-btn">通过</button><button class="small-btn">驳回</button></article>
+              <article><b>INV20260627005</b><span>明辰贸易 - 专票 - 8600.00</span><button class="small-btn">通过</button><button class="small-btn">驳回</button></article>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="payment">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>付款申请</h2>
+              <button class="primary-btn">新建申请</button>
+            </div>
+            <div class="approval-list">
+              <article><b>PAY20260628001</b><span>外协打样 - 900.00 - 待审批</span><button class="small-btn">查看</button></article>
+              <article><b>PAY20260626009</b><span>客户退款 - 320.00 - 已通过</span><button class="small-btn">查看</button></article>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="after-sales">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>售后申请</h2>
+              <button class="primary-btn">新建售后</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>售后号</th><th>订单</th><th>类型</th><th>状态</th><th>处理人</th><th>操作</th></tr></thead>
+                <tbody>
+                  <tr><td>AS20260628003</td><td>JZ20260621019</td><td>补发</td><td><span class="tag amber">处理中</span></td><td>周售后</td><td><button class="small-btn">处理</button></td></tr>
+                  <tr><td>AS20260627002</td><td>JZ20260618011</td><td>退款</td><td><span class="tag green">已完成</span></td><td>周售后</td><td><button class="small-btn">查看</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="users">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>用户与权限</h2>
+              <button class="primary-btn">创建用户</button>
+            </div>
+            <div class="role-grid">
+              <article><b>销售</b><span>订单录入、客户维护、售后提交</span></article>
+              <article><b>设计</b><span>设计任务、设计稿、设计确认</span></article>
+              <article><b>生产</b><span>工厂代工安排、确认完成、异常记录</span></article>
+              <article><b>财务</b><span>发票审批、付款审批、金额查看</span></article>
+              <article><b>管理员</b><span>账号权限、店铺、全局查看</span></article>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

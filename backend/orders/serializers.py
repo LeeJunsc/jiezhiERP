@@ -1,0 +1,128 @@
+from rest_framework import serializers
+
+from customers.serializers import CustomerSerializer
+from orders.models import DesignOption, Order, OrderItem
+from stores.serializers import StoreSerializer
+from system_settings.serializers import PaymentChannelSerializer
+
+
+class DesignOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DesignOption
+        fields = ["id", "name", "requires_design", "sort_order", "status", "description", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = [
+            "id",
+            "product_name",
+            "sku",
+            "quantity",
+            "unit_price",
+            "line_amount",
+            "custom_size",
+            "custom_color",
+            "custom_note",
+        ]
+        read_only_fields = ["id"]
+
+
+class OrderListSerializer(serializers.ModelSerializer):
+    store = StoreSerializer(read_only=True)
+    customer = CustomerSerializer(read_only=True)
+    design_option = DesignOptionSerializer(read_only=True)
+    payment_channel = PaymentChannelSerializer(read_only=True)
+    salesperson_name = serializers.CharField(source="salesperson.get_full_name", read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "order_no",
+            "platform_order_no",
+            "store",
+            "customer",
+            "salesperson",
+            "salesperson_name",
+            "design_option",
+            "status",
+            "total_amount",
+            "paid_amount",
+            "payment_status",
+            "payment_channel",
+            "delivery_date",
+            "urgent",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True)
+    order_no = serializers.CharField(required=False, allow_blank=True)
+    store_info = StoreSerializer(source="store", read_only=True)
+    customer_info = CustomerSerializer(source="customer", read_only=True)
+    design_option_info = DesignOptionSerializer(source="design_option", read_only=True)
+    payment_channel_info = PaymentChannelSerializer(source="payment_channel", read_only=True)
+    salesperson_name = serializers.CharField(source="salesperson.get_full_name", read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "order_no",
+            "platform_order_no",
+            "store",
+            "store_info",
+            "customer",
+            "customer_info",
+            "salesperson",
+            "salesperson_name",
+            "design_option",
+            "design_option_info",
+            "status",
+            "total_amount",
+            "paid_amount",
+            "payment_status",
+            "payment_channel",
+            "payment_channel_info",
+            "delivery_date",
+            "urgent",
+            "customization_note",
+            "remark",
+            "submitted_at",
+            "completed_at",
+            "items",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "status", "submitted_at", "completed_at", "created_at", "updated_at"]
+
+    def create(self, validated_data):
+        from orders.services import next_order_no
+
+        items_data = validated_data.pop("items", [])
+        if not validated_data.get("order_no"):
+            validated_data["order_no"] = next_order_no()
+        order = Order.objects.create(**validated_data)
+        for item_data in items_data:
+            if not item_data.get("line_amount"):
+                item_data["line_amount"] = item_data["quantity"] * item_data["unit_price"]
+            OrderItem.objects.create(order=order, created_by=order.created_by, **item_data)
+        return order
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop("items", None)
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        if items_data is not None:
+            instance.items.all().delete()
+            for item_data in items_data:
+                if not item_data.get("line_amount"):
+                    item_data["line_amount"] = item_data["quantity"] * item_data["unit_price"]
+                OrderItem.objects.create(order=instance, created_by=instance.created_by, **item_data)
+        return instance
