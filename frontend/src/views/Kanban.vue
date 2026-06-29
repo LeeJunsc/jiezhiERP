@@ -15,26 +15,37 @@
         />
       </div>
       <section class="metric-grid">
-        <article class="metric"><span>订单金额</span><strong>¥{{ summary.amount }}</strong></article>
-        <article class="metric"><span>订单数</span><strong>{{ summary.order_count }}</strong></article>
-        <article class="metric"><span>老客户订单数</span><strong>{{ summary.returning_customer_order_count }}</strong></article>
-        <article class="metric"><span>产生售后订单数</span><strong>{{ summary.after_sales_order_count }}</strong></article>
+        <article
+          v-for="metric in metrics"
+          :key="metric.key"
+          class="metric metric-button"
+          :class="{ active: activeMetric === metric.key }"
+          role="button"
+          tabindex="0"
+          @click="activeMetric = metric.key"
+          @keydown.enter="activeMetric = metric.key"
+        >
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.summaryValue() }}</strong>
+        </article>
       </section>
     </section>
 
     <section class="panel">
       <div class="panel-head">
-        <h2>订单金额趋势</h2>
+        <h2>{{ activeMetricConfig.label }}趋势</h2>
         <span>{{ data?.start_date }} 至 {{ data?.end_date }}</span>
       </div>
       <div class="chart">
-        <svg viewBox="0 0 800 280" role="img" aria-label="订单金额折线图">
+        <svg viewBox="0 0 800 280" role="img" :aria-label="`${activeMetricConfig.label}折线图`">
           <line x1="40" y1="230" x2="760" y2="230" stroke="#d8dee9" />
           <line x1="40" y1="30" x2="40" y2="230" stroke="#d8dee9" />
-          <polyline :points="amountPoints" fill="none" stroke="#2563eb" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" />
-          <circle v-for="point in pointList" :key="point.date" :cx="point.x" :cy="point.y" r="5" fill="#2563eb" />
-          <text x="44" y="24" fill="#6b7280" font-size="12">金额</text>
+          <text x="44" y="46" fill="#6b7280" font-size="12">{{ activeMetricConfig.axisLabel }}</text>
           <text x="704" y="252" fill="#6b7280" font-size="12">日期</text>
+          <text x="44" y="226" fill="#9ca3af" font-size="11">{{ activeMetricConfig.format(0) }}</text>
+          <text x="44" y="34" fill="#9ca3af" font-size="11">{{ activeMetricConfig.format(maxMetricValue) }}</text>
+          <polyline :points="chartPoints" fill="none" stroke="#2563eb" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" />
+          <circle v-for="point in pointList" :key="point.date" :cx="point.x" :cy="point.y" r="5" fill="#2563eb" />
         </svg>
         <div class="chart-labels">
           <span v-for="item in series" :key="item.date">{{ item.date.slice(5) }}</span>
@@ -77,17 +88,64 @@ const summary = reactive({
   after_sales_order_count: 0
 })
 const series = ref<KanbanRow[]>([])
+const activeMetric = ref<MetricKey>('amount')
+
+type MetricKey = 'amount' | 'order_count' | 'returning_customer_order_count' | 'after_sales_order_count'
+
+const metricConfigs: Record<MetricKey, {
+  key: MetricKey
+  label: string
+  axisLabel: string
+  value: (row: KanbanRow) => number
+  summaryValue: () => string
+  format: (value: number) => string
+}> = {
+  amount: {
+    key: 'amount',
+    label: '订单金额',
+    axisLabel: '金额',
+    value: (row) => Number(row.amount),
+    summaryValue: () => `¥${Number(summary.amount || 0).toFixed(2)}`,
+    format: (value) => `¥${Number(value || 0).toFixed(0)}`
+  },
+  order_count: {
+    key: 'order_count',
+    label: '订单数',
+    axisLabel: '数量',
+    value: (row) => Number(row.order_count),
+    summaryValue: () => `${summary.order_count}`,
+    format: (value) => `${Number(value || 0).toFixed(0)}单`
+  },
+  returning_customer_order_count: {
+    key: 'returning_customer_order_count',
+    label: '老客户订单数',
+    axisLabel: '数量',
+    value: (row) => Number(row.returning_customer_order_count),
+    summaryValue: () => `${summary.returning_customer_order_count}`,
+    format: (value) => `${Number(value || 0).toFixed(0)}单`
+  },
+  after_sales_order_count: {
+    key: 'after_sales_order_count',
+    label: '产生售后订单数',
+    axisLabel: '数量',
+    value: (row) => Number(row.after_sales_order_count),
+    summaryValue: () => `${summary.after_sales_order_count}`,
+    format: (value) => `${Number(value || 0).toFixed(0)}单`
+  }
+}
+const metrics = Object.values(metricConfigs)
+const activeMetricConfig = computed(() => metricConfigs[activeMetric.value])
+const maxMetricValue = computed(() => Math.max(...series.value.map((item) => activeMetricConfig.value.value(item)), 1))
 
 const pointList = computed(() => {
-  const max = Math.max(...series.value.map((item) => Number(item.amount)), 1)
   const count = Math.max(series.value.length - 1, 1)
   return series.value.map((item, index) => ({
     date: item.date,
     x: 40 + (720 / count) * index,
-    y: 230 - (Number(item.amount) / max) * 190
+    y: 230 - (activeMetricConfig.value.value(item) / maxMetricValue.value) * 190
   }))
 })
-const amountPoints = computed(() => pointList.value.map((item) => `${item.x},${item.y}`).join(' '))
+const chartPoints = computed(() => pointList.value.map((item) => `${item.x},${item.y}`).join(' '))
 
 async function load() {
   const response = await api.get('/dashboard/kanban', {

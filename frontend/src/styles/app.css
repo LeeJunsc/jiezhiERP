@@ -151,6 +151,24 @@ a {
   padding: 16px;
 }
 
+.metric-button {
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.metric-button:hover,
+.metric-button:focus {
+  border-color: #93b4f8;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, .12);
+  outline: none;
+}
+
+.metric-button.active {
+  border-color: #2563eb;
+  background: #f7fbff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, .25);
+}
+
 .metric span {
   color: #6b7280;
 }
