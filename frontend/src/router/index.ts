@@ -5,6 +5,8 @@ import Dashboard from '../views/Dashboard.vue'
 import DesignOptions from '../views/DesignOptions.vue'
 import DesignTasks from '../views/DesignTasks.vue'
 import Kanban from '../views/Kanban.vue'
+import AfterSalesRequests from '../views/AfterSalesRequests.vue'
+import InvoiceRequests from '../views/InvoiceRequests.vue'
 import Login from '../views/Login.vue'
 import NewOrder from '../views/NewOrder.vue'
 import OrderDetail from '../views/OrderDetail.vue'
@@ -25,6 +27,8 @@ const router = createRouter({
     { path: '/orders/:id', component: OrderDetail },
     { path: '/design-tasks', component: DesignTasks },
     { path: '/production-arrangements', component: ProductionArrangements },
+    { path: '/invoice-requests', component: InvoiceRequests },
+    { path: '/after-sales-requests', component: AfterSalesRequests },
     { path: '/customers', component: CustomerList },
     { path: '/system', component: SystemManagement },
     { path: '/stores', component: StoreList },

@@ -18,6 +18,7 @@ class Store(TimeStampedModel):
 
     name = models.CharField(max_length=120)
     platform = models.CharField(max_length=40, choices=Platform.choices)
+    custom_platform = models.CharField(max_length=80, blank=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ENABLED)
 
@@ -29,3 +30,9 @@ class Store(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+    @property
+    def platform_label(self):
+        if self.platform == self.Platform.OTHER and self.custom_platform:
+            return self.custom_platform
+        return self.get_platform_display()

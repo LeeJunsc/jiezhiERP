@@ -34,3 +34,7 @@ class IsProductionOrAdmin(RolePermission):
 
 class IsFinanceOrAdmin(RolePermission):
     allowed_roles = ("财务", "管理员")
+
+
+class IsAfterSalesOrAdmin(RolePermission):
+    allowed_roles = ("售后", "管理员")

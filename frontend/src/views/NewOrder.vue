@@ -49,7 +49,7 @@
           <div class="form-grid">
             <el-form-item label="来源店铺">
               <el-select v-model="form.store">
-                <el-option v-for="store in stores" :key="store.id" :label="store.name" :value="store.id" />
+                <el-option v-for="store in stores" :key="store.id" :label="storeLabel(store)" :value="store.id" />
               </el-select>
             </el-form-item>
             <el-form-item label="销售负责人"><el-input :model-value="auth.user?.first_name || auth.user?.username" disabled /></el-form-item>
@@ -226,7 +226,7 @@ const itemsTotal = computed(() => items.value.reduce((sum, row) => sum + product
 onMounted(async () => {
   await auth.loadMe()
   form.salesperson = auth.user?.id
-  stores.value = (await list<any>('/stores')).results
+  stores.value = (await list<any>('/stores', { status: 'enabled' })).results
   await searchCustomers('')
   designOptions.value = (await list<any>('/design-options', { status: 'enabled' })).results
   paymentChannels.value = (await list<any>('/payment-channels', { status: 'enabled' })).results
@@ -271,6 +271,11 @@ function customerLabel(customer: any) {
   const company = customer.company ? ` / ${customer.company}` : ''
   const phone = customer.phone ? ` / ${customer.phone}` : ''
   return `${customer.name}${company}${phone}`
+}
+
+function storeLabel(store: any) {
+  const platform = store.platform_label || store.custom_platform || ''
+  return platform ? `${store.name} / ${platform}` : store.name
 }
 
 function addProduct() {

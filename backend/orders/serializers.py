@@ -1,3 +1,4 @@
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
 from customers.serializers import CustomerSerializer
@@ -36,6 +37,9 @@ class OrderListSerializer(serializers.ModelSerializer):
     design_option = DesignOptionSerializer(read_only=True)
     payment_channel = PaymentChannelSerializer(read_only=True)
     salesperson_name = serializers.CharField(source="salesperson.get_full_name", read_only=True)
+    design_finalized_at = serializers.SerializerMethodField()
+    production_arranged_at = serializers.SerializerMethodField()
+    invoice_requested_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -55,9 +59,31 @@ class OrderListSerializer(serializers.ModelSerializer):
             "payment_channel",
             "delivery_date",
             "urgent",
+            "design_finalized_at",
+            "production_arranged_at",
+            "invoice_requested_at",
             "created_at",
             "updated_at",
         ]
+
+    def get_design_finalized_at(self, obj):
+        try:
+            return obj.design_task.confirmed_at
+        except ObjectDoesNotExist:
+            return None
+
+    def get_production_arranged_at(self, obj):
+        try:
+            return obj.production_arrangement.created_at
+        except ObjectDoesNotExist:
+            return None
+
+    def get_invoice_requested_at(self, obj):
+        invoices = getattr(obj, "prefetched_invoice_requests", None)
+        if invoices is not None:
+            return invoices[0].created_at if invoices else None
+        invoice = obj.invoice_requests.order_by("created_at").first()
+        return invoice.created_at if invoice else None
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -68,6 +94,9 @@ class OrderSerializer(serializers.ModelSerializer):
     design_option_info = DesignOptionSerializer(source="design_option", read_only=True)
     payment_channel_info = PaymentChannelSerializer(source="payment_channel", read_only=True)
     salesperson_name = serializers.CharField(source="salesperson.get_full_name", read_only=True)
+    design_finalized_at = serializers.SerializerMethodField()
+    production_arranged_at = serializers.SerializerMethodField()
+    invoice_requested_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -95,11 +124,33 @@ class OrderSerializer(serializers.ModelSerializer):
             "remark",
             "submitted_at",
             "completed_at",
+            "design_finalized_at",
+            "production_arranged_at",
+            "invoice_requested_at",
             "items",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "status", "submitted_at", "completed_at", "created_at", "updated_at"]
+
+    def get_design_finalized_at(self, obj):
+        try:
+            return obj.design_task.confirmed_at
+        except ObjectDoesNotExist:
+            return None
+
+    def get_production_arranged_at(self, obj):
+        try:
+            return obj.production_arrangement.created_at
+        except ObjectDoesNotExist:
+            return None
+
+    def get_invoice_requested_at(self, obj):
+        invoices = getattr(obj, "prefetched_invoice_requests", None)
+        if invoices is not None:
+            return invoices[0].created_at if invoices else None
+        invoice = obj.invoice_requests.order_by("created_at").first()
+        return invoice.created_at if invoice else None
 
     def create(self, validated_data):
         from orders.services import next_order_no

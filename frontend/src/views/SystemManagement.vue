@@ -18,16 +18,30 @@
               <el-option label="其他" value="other" />
             </el-select>
           </el-form-item>
+          <el-form-item v-if="storeForm.platform === 'other'" label="平台类型">
+            <el-input v-model="storeForm.custom_platform" placeholder="填写平台类型" />
+          </el-form-item>
           <el-form-item><el-button type="primary" @click="createStore">新建店铺</el-button></el-form-item>
         </el-form>
         <el-table :data="stores" border>
           <el-table-column prop="name" label="店铺" />
-          <el-table-column prop="platform" label="平台" />
-          <el-table-column prop="status" label="状态" />
+          <el-table-column label="平台">
+            <template #default="{ row }">{{ storePlatformLabel(row) }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="120">
+            <template #default="{ row }">{{ statusLabel(row.status) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="150">
+            <template #default="{ row }">
+              <el-button size="small" :type="row.status === 'enabled' ? 'warning' : 'success'" plain @click="toggleStore(row)">
+                {{ row.status === 'enabled' ? '停用' : '启用' }}
+              </el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane label="设计处理方式" name="design">
+      <el-tab-pane label="设计流程" name="design">
         <el-form inline :model="designForm">
           <el-form-item label="名称"><el-input v-model="designForm.name" /></el-form-item>
           <el-form-item label="生成设计任务"><el-switch v-model="designForm.requires_design" /></el-form-item>
@@ -40,7 +54,16 @@
             <template #default="{ row }">{{ row.requires_design ? '是' : '否' }}</template>
           </el-table-column>
           <el-table-column prop="sort_order" label="排序" width="100" />
-          <el-table-column prop="status" label="状态" width="120" />
+          <el-table-column label="状态" width="120">
+            <template #default="{ row }">{{ statusLabel(row.status) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="150">
+            <template #default="{ row }">
+              <el-button size="small" :type="row.status === 'enabled' ? 'warning' : 'success'" plain @click="toggleDesignOption(row)">
+                {{ row.status === 'enabled' ? '停用' : '启用' }}
+              </el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -59,62 +82,235 @@
             <template #default="{ row }">{{ row.is_default ? '是' : '否' }}</template>
           </el-table-column>
           <el-table-column prop="sort_order" label="排序" width="100" />
-          <el-table-column prop="status" label="状态" width="120" />
+          <el-table-column label="状态" width="120">
+            <template #default="{ row }">{{ statusLabel(row.status) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="150">
+            <template #default="{ row }">
+              <el-button size="small" :type="row.status === 'enabled' ? 'warning' : 'success'" plain @click="togglePaymentChannel(row)">
+                {{ row.status === 'enabled' ? '停用' : '启用' }}
+              </el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane label="用户权限" name="users">
-        <el-table :data="users" border>
-          <el-table-column prop="username" label="用户名" />
-          <el-table-column prop="first_name" label="姓名" />
-          <el-table-column label="角色">
-            <template #default="{ row }">{{ roleNames(row.groups) }}</template>
-          </el-table-column>
-          <el-table-column label="启用" width="100">
-            <template #default="{ row }">{{ row.is_active ? '是' : '否' }}</template>
-          </el-table-column>
-        </el-table>
+      <el-tab-pane label="用户管理" name="users">
+        <el-tabs v-model="userManageTab">
+          <el-tab-pane label="角色" name="roles">
+            <el-form inline :model="roleForm">
+              <el-form-item label="角色名"><el-input v-model="roleForm.name" /></el-form-item>
+              <el-form-item><el-button type="primary" @click="createRole">新建角色</el-button></el-form-item>
+            </el-form>
+            <div class="permission-editor">
+              <section class="permission-palette">
+                <div class="permission-palette-head">
+                  <strong>权限项</strong>
+                  <span>{{ activeRole ? `正在编辑：${activeRole.name}` : '先选择下方角色' }}</span>
+                </div>
+                <div class="permission-groups">
+                  <section v-for="group in permissionGroups" :key="group.name">
+                    <strong>{{ group.name }}</strong>
+                    <div class="permission-tags">
+                      <el-tag
+                        v-for="permission in group.items"
+                        :key="permission.id"
+                        :type="activeRoleHasPermission(permission.id) ? 'success' : 'info'"
+                        :effect="activeRoleHasPermission(permission.id) ? 'dark' : 'plain'"
+                        :class="{ 'permission-tag-clickable': activeRole && !activeRoleHasPermission(permission.id) }"
+                        @click="addPermissionToActiveRole(permission.id)"
+                      >
+                        {{ permission.label }}
+                      </el-tag>
+                    </div>
+                  </section>
+                </div>
+              </section>
+
+              <section class="role-permission-list">
+                <article
+                  v-for="role in roles"
+                  :key="role.id"
+                  class="role-permission-card"
+                  :class="{ active: role.id === activeRoleId }"
+                  @click="activeRoleId = role.id"
+                >
+                  <div class="role-card-head">
+                    <strong>{{ role.name }}</strong>
+                    <el-button size="small" type="primary" @click.stop="saveRole(role)">保存</el-button>
+                  </div>
+                  <div class="selected-permissions">
+                    <el-tag
+                      v-for="permission in rolePermissions(role)"
+                      :key="permission.id"
+                      closable
+                      @close="removePermissionFromRole(role, permission.id)"
+                    >
+                      {{ permission.label }}
+                    </el-tag>
+                    <span v-if="!rolePermissions(role).length" class="empty-text">暂无权限</span>
+                  </div>
+                </article>
+              </section>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="用户" name="user-list">
+            <div class="table-toolbar">
+              <el-button type="primary" @click="openCreateUser">新建用户</el-button>
+            </div>
+            <el-table :data="users" border>
+              <el-table-column prop="username" label="用户名" width="130" />
+              <el-table-column prop="first_name" label="姓名" width="120" />
+              <el-table-column label="角色" min-width="240">
+                <template #default="{ row }">
+                  <el-checkbox-group v-model="row._groupIds">
+                    <el-checkbox v-for="role in roles" :key="role.id" :label="role.id">{{ role.name }}</el-checkbox>
+                  </el-checkbox-group>
+                </template>
+              </el-table-column>
+              <el-table-column label="合并权限" min-width="260">
+                <template #default="{ row }">{{ userPermissionLabels(row) }}</template>
+              </el-table-column>
+              <el-table-column label="状态" width="90">
+                <template #default="{ row }">{{ row.is_active ? '启用' : '停用' }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="180">
+                <template #default="{ row }">
+                  <el-button size="small" type="primary" @click="saveUserRoles(row)">保存</el-button>
+                  <el-button
+                    size="small"
+                    :type="row.is_active ? 'warning' : 'success'"
+                    plain
+                    :disabled="row.id === auth.user?.id && row.is_active"
+                    @click="toggleUserStatus(row)"
+                  >
+                    {{ row.is_active ? '停用' : '启用' }}
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-tab-pane>
+        </el-tabs>
       </el-tab-pane>
     </el-tabs>
   </section>
+
+  <el-dialog v-model="userDialogVisible" title="新建用户" width="min(560px, 94vw)">
+    <el-form label-position="top" :model="userForm">
+      <el-form-item label="用户名">
+        <el-input v-model="userForm.username" placeholder="用于登录，例如 sales02" />
+      </el-form-item>
+      <el-form-item label="姓名">
+        <el-input v-model="userForm.first_name" placeholder="员工姓名" />
+      </el-form-item>
+      <el-form-item label="邮箱">
+        <el-input v-model="userForm.email" placeholder="可选" />
+      </el-form-item>
+      <el-form-item label="初始密码">
+        <el-input v-model="userForm.password" type="password" show-password placeholder="至少 8 位，创建后可再修改" />
+      </el-form-item>
+      <el-form-item label="角色">
+        <el-checkbox-group v-model="userForm.group_ids">
+          <el-checkbox v-for="role in roles" :key="role.id" :label="role.id">{{ role.name }}</el-checkbox>
+        </el-checkbox-group>
+      </el-form-item>
+      <el-form-item label="账号状态">
+        <el-switch v-model="userForm.is_active" active-text="启用" inactive-text="停用" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="userDialogVisible = false">取消</el-button>
+      <el-button type="primary" @click="createUser">创建用户</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { create, list } from '../api/client'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { api, create, list } from '../api/client'
+import { useAuthStore } from '../stores/auth'
 
+const auth = useAuthStore()
 const activeTab = ref('stores')
+const userManageTab = ref('roles')
 const stores = ref<any[]>([])
 const designOptions = ref<any[]>([])
 const paymentChannels = ref<any[]>([])
 const users = ref<any[]>([])
+const roles = ref<any[]>([])
+const permissions = ref<any[]>([])
+const userDialogVisible = ref(false)
+const activeRoleId = ref<number | null>(null)
 
-const storeForm = reactive({ name: '', platform: 'taobao', status: 'enabled' })
+const storeForm = reactive({ name: '', platform: 'taobao', custom_platform: '', status: 'enabled' })
 const designForm = reactive({ name: '', requires_design: true, sort_order: 50, status: 'enabled', description: '' })
 const channelForm = reactive({ name: '', code: '', is_default: false, sort_order: 70, status: 'enabled', description: '' })
+const roleForm = reactive({ name: '' })
+const userForm = reactive({
+  username: '',
+  first_name: '',
+  email: '',
+  password: '',
+  group_ids: [] as number[],
+  is_active: true
+})
+const permissionGroups = computed(() => {
+  const grouped: Record<string, any[]> = {}
+  for (const permission of permissions.value) {
+    if (!grouped[permission.group]) grouped[permission.group] = []
+    grouped[permission.group].push(permission)
+  }
+  return Object.entries(grouped).map(([name, items]) => ({ name, items }))
+})
+const activeRole = computed(() => roles.value.find((role) => role.id === activeRoleId.value) || null)
 
 function roleNames(groups: Array<{ name: string }>) {
   return groups.map((item) => item.name).join('、') || '未分配'
 }
 
+function statusLabel(status: string) {
+  return status === 'enabled' ? '启用' : '停用'
+}
+
+function storePlatformLabel(store: any) {
+  return store.platform_label || (store.platform === 'other' && store.custom_platform ? store.custom_platform : store.platform)
+}
+
 async function loadAll() {
-  const [storePage, designPage, channelPage, userPage] = await Promise.all([
+  const [storePage, designPage, channelPage, userPage, rolePage, permissionsResponse] = await Promise.all([
     list<any>('/stores'),
     list<any>('/design-options'),
     list<any>('/payment-channels'),
-    list<any>('/users')
+    list<any>('/users'),
+    list<any>('/roles'),
+    api.get('/roles/permissions/')
   ])
+  permissions.value = permissionsResponse.data
+  const permissionIdByCode = Object.fromEntries(permissions.value.map((permission) => [permission.code, permission.id]))
   stores.value = storePage.results
   designOptions.value = designPage.results
   paymentChannels.value = channelPage.results
-  users.value = userPage.results
+  roles.value = rolePage.results.map((role) => ({
+    ...role,
+    _permissionIds: (role.permission_codes || []).map((code: string) => permissionIdByCode[code]).filter(Boolean)
+  }))
+  if (!activeRoleId.value && roles.value.length) activeRoleId.value = roles.value[0].id
+  if (activeRoleId.value && !roles.value.some((role) => role.id === activeRoleId.value)) {
+    activeRoleId.value = roles.value[0]?.id || null
+  }
+  users.value = userPage.results.map((user) => ({
+    ...user,
+    _groupIds: (user.groups || []).map((group: any) => group.id)
+  }))
 }
 
 async function createStore() {
   if (!storeForm.name) return ElMessage.warning('请填写店铺名')
+  if (storeForm.platform === 'other' && !storeForm.custom_platform) return ElMessage.warning('请填写平台类型')
   await create('/stores/', storeForm)
-  storeForm.name = ''
+  Object.assign(storeForm, { name: '', platform: 'taobao', custom_platform: '', status: 'enabled' })
   ElMessage.success('店铺已创建')
   await loadAll()
 }
@@ -123,7 +319,7 @@ async function createDesignOption() {
   if (!designForm.name) return ElMessage.warning('请填写名称')
   await create('/design-options/', designForm)
   designForm.name = ''
-  ElMessage.success('设计处理方式已创建')
+  ElMessage.success('设计流程已创建')
   await loadAll()
 }
 
@@ -133,6 +329,126 @@ async function createChannel() {
   Object.assign(channelForm, { name: '', code: '', is_default: false, sort_order: channelForm.sort_order + 10 })
   ElMessage.success('收款渠道已创建')
   await loadAll()
+}
+
+async function toggleStore(row: any) {
+  await api.patch(`/stores/${row.id}/`, { status: row.status === 'enabled' ? 'disabled' : 'enabled' })
+  ElMessage.success(`店铺已${row.status === 'enabled' ? '停用' : '启用'}`)
+  await loadAll()
+}
+
+async function toggleDesignOption(row: any) {
+  await api.patch(`/design-options/${row.id}/`, { status: row.status === 'enabled' ? 'disabled' : 'enabled' })
+  ElMessage.success(`设计流程已${row.status === 'enabled' ? '停用' : '启用'}`)
+  await loadAll()
+}
+
+async function togglePaymentChannel(row: any) {
+  await api.patch(`/payment-channels/${row.id}/`, { status: row.status === 'enabled' ? 'disabled' : 'enabled' })
+  ElMessage.success(`收款渠道已${row.status === 'enabled' ? '停用' : '启用'}`)
+  await loadAll()
+}
+
+async function createRole() {
+  if (!roleForm.name) return ElMessage.warning('请填写角色名')
+  await create('/roles/', { name: roleForm.name, permission_ids: [] })
+  roleForm.name = ''
+  ElMessage.success('角色已创建')
+  await loadAll()
+}
+
+async function saveRole(row: any) {
+  await api.patch(`/roles/${row.id}/`, { name: row.name, permission_ids: row._permissionIds || [] })
+  ElMessage.success('角色权限已保存')
+  await loadAll()
+}
+
+function activeRoleHasPermission(permissionId: number) {
+  return Boolean(activeRole.value?._permissionIds?.includes(permissionId))
+}
+
+function addPermissionToActiveRole(permissionId: number) {
+  if (!activeRole.value) {
+    ElMessage.warning('请先选择要编辑的角色')
+    return
+  }
+  if (activeRoleHasPermission(permissionId)) return
+  activeRole.value._permissionIds = [...(activeRole.value._permissionIds || []), permissionId]
+}
+
+function removePermissionFromRole(role: any, permissionId: number) {
+  role._permissionIds = (role._permissionIds || []).filter((id: number) => id !== permissionId)
+}
+
+function rolePermissions(role: any) {
+  const selected = new Set(role._permissionIds || [])
+  return permissions.value.filter((permission) => selected.has(permission.id))
+}
+
+function openCreateUser() {
+  Object.assign(userForm, {
+    username: '',
+    first_name: '',
+    email: '',
+    password: 'ChangeMe123!',
+    group_ids: [],
+    is_active: true
+  })
+  userDialogVisible.value = true
+}
+
+async function createUser() {
+  if (!userForm.username.trim()) return ElMessage.warning('请填写用户名')
+  if (!userForm.password || userForm.password.length < 8) return ElMessage.warning('初始密码至少 8 位')
+  await create('/users/', {
+    username: userForm.username.trim(),
+    first_name: userForm.first_name.trim(),
+    email: userForm.email.trim(),
+    password: userForm.password,
+    group_ids: userForm.group_ids,
+    is_active: userForm.is_active
+  })
+  ElMessage.success('用户已创建')
+  userDialogVisible.value = false
+  await loadAll()
+}
+
+async function saveUserRoles(row: any) {
+  await api.patch(`/users/${row.id}/`, { group_ids: row._groupIds || [] })
+  ElMessage.success('用户角色已保存')
+  await loadAll()
+}
+
+async function toggleUserStatus(row: any) {
+  if (row.id === auth.user?.id && row.is_active) {
+    return ElMessage.warning('不能停用当前登录账号')
+  }
+  if (row.is_active) {
+    try {
+      await ElMessageBox.confirm(`确认停用账号 ${row.username}？停用后该账号将不能登录。`, '停用账号', {
+        confirmButtonText: '停用',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+    } catch {
+      return
+    }
+  }
+  await api.patch(`/users/${row.id}/`, { is_active: !row.is_active })
+  ElMessage.success(`账号已${row.is_active ? '停用' : '启用'}`)
+  await loadAll()
+}
+
+function userPermissionLabels(user: any) {
+  if (user.is_superuser || user.effective_permission_codes?.includes('*')) return '全部权限'
+  const selectedRoleIds = new Set(user._groupIds || [])
+  const permissionIds = new Set<number>()
+  for (const role of roles.value) {
+    if (!selectedRoleIds.has(role.id)) continue
+    for (const permissionId of role._permissionIds || []) permissionIds.add(permissionId)
+  }
+  const labels = permissions.value.filter((permission) => permissionIds.has(permission.id)).map((permission) => permission.label)
+  return labels.join('、') || '暂无权限'
 }
 
 onMounted(loadAll)

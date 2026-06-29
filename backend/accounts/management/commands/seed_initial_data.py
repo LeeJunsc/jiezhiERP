@@ -1,8 +1,11 @@
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group, Permission, User
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from after_sales.models import AfterSalesRequest
+from accounts.permission_catalog import split_permission_code
+from attachments.models import Attachment
 from customers.models import Customer
 from design.models import DesignTask
 from finance.models import InvoiceRequest
@@ -20,9 +23,102 @@ class Command(BaseCommand):
         naive = timezone.datetime.strptime(date_text, "%Y%m%d").replace(hour=10, minute=0)
         return timezone.make_aware(naive)
 
+    def create_demo_attachment(self, *, business_type, business_id, file_name, content, uploader):
+        attachment, created = Attachment.objects.get_or_create(
+            business_type=business_type,
+            business_id=business_id,
+            file_name=file_name,
+            defaults={
+                "file_type": "text/plain",
+                "file_size": len(content.encode("utf-8")),
+                "uploader": uploader,
+                "created_by": uploader,
+            },
+        )
+        if created or not attachment.file:
+            attachment.file.save(file_name, ContentFile(content.encode("utf-8")), save=True)
+        return attachment
+
     def handle(self, *args, **options):
-        roles = ["销售", "设计", "生产", "财务", "管理员"]
+        roles = ["销售", "设计", "生产", "财务", "售后", "管理员"]
         groups = {name: Group.objects.get_or_create(name=name)[0] for name in roles}
+
+        role_permissions = {
+            "销售": [
+                "orders.view_order",
+                "orders.add_order",
+                "orders.change_order",
+                "customers.view_customer",
+                "customers.add_customer",
+                "customers.change_customer",
+                "stores.view_store",
+                "orders.view_designoption",
+                "system_settings.view_paymentchannel",
+                "attachments.view_attachment",
+                "attachments.add_attachment",
+                "after_sales.view_aftersalesrequest",
+                "after_sales.change_aftersalesrequest",
+            ],
+            "设计": [
+                "orders.view_order",
+                "customers.view_customer",
+                "design.view_designtask",
+                "design.change_designtask",
+                "attachments.view_attachment",
+                "attachments.add_attachment",
+            ],
+            "生产": [
+                "orders.view_order",
+                "customers.view_customer",
+                "production.view_productionarrangement",
+                "production.change_productionarrangement",
+                "attachments.view_attachment",
+                "attachments.add_attachment",
+            ],
+            "财务": [
+                "orders.view_order",
+                "customers.view_customer",
+                "finance.view_invoicerequest",
+                "finance.change_invoicerequest",
+                "system_settings.view_paymentchannel",
+            ],
+            "售后": [
+                "orders.view_order",
+                "customers.view_customer",
+                "after_sales.view_aftersalesrequest",
+                "after_sales.change_aftersalesrequest",
+                "attachments.view_attachment",
+                "attachments.add_attachment",
+            ],
+        }
+        all_configured_permissions = set()
+        for codes in role_permissions.values():
+            all_configured_permissions.update(codes)
+        role_permissions["管理员"] = list(all_configured_permissions) + [
+            "orders.delete_order",
+            "customers.delete_customer",
+            "stores.change_store",
+            "orders.change_designoption",
+            "system_settings.change_paymentchannel",
+            "attachments.delete_attachment",
+            "auth.view_user",
+            "auth.add_user",
+            "auth.change_user",
+            "auth.delete_user",
+            "auth.view_group",
+            "auth.add_group",
+            "auth.change_group",
+            "auth.delete_group",
+        ]
+        for role, codes in role_permissions.items():
+            permissions = []
+            for code in codes:
+                app_label, codename = split_permission_code(code)
+                try:
+                    permissions.append(Permission.objects.get(content_type__app_label=app_label, codename=codename))
+                except Permission.DoesNotExist:
+                    continue
+            groups[role].permissions.set(permissions)
 
         admin, _ = User.objects.get_or_create(username="admin", defaults={"is_staff": True, "is_superuser": True})
         admin.is_staff = True
@@ -415,5 +511,39 @@ class Command(BaseCommand):
             )
             after_sale_created_at = self.demo_datetime(request_no, prefix_length=2)
             AfterSalesRequest.objects.filter(pk=after_sale.pk).update(created_at=after_sale_created_at, updated_at=after_sale_created_at)
+
+        demo_attachment_data = [
+            ("order", "JZ20260628001", "客户原始需求说明.txt", "客户提供的尺寸、LOGO位置、材质要求。"),
+            ("order", "JZ20260626009", "订单素材清单.txt", "客户确认的桌牌名单与排版要求。"),
+            ("design", "JZ20260626009", "设计定稿说明.txt", "设计定稿：亚克力桌牌版式已确认，可进入生产。"),
+            ("design", "JZ20260623006", "设计最终版.txt", "设计定稿：礼品套装外盒与内托结构确认。"),
+            ("production", "JZ20260623006", "生产交接说明.txt", "生产安排：华东代工厂，按确认稿生产。"),
+            ("invoice", "INV20260626003", "电子发票文件.txt", "发票附件：星禾设计专票演示文件。"),
+            ("invoice", "INV20260623002", "驳回原因附件.txt", "发票附件：抬头信息不完整，需销售重新确认。"),
+            ("after_sales", "AS20260627002", "售后证据说明.txt", "客户反馈少发 2 个桌牌，附核对说明。"),
+            ("after_sales", "AS20260625001", "售后处理凭证.txt", "售后处理：已补偿优惠券，客户确认。"),
+        ]
+        for business_type, identifier, file_name, content in demo_attachment_data:
+            business_id = None
+            if business_type == "order" and identifier in orders:
+                business_id = orders[identifier].id
+            elif business_type == "design" and identifier in orders and hasattr(orders[identifier], "design_task"):
+                business_id = orders[identifier].design_task.id
+            elif business_type == "production" and identifier in orders and hasattr(orders[identifier], "production_arrangement"):
+                business_id = orders[identifier].production_arrangement.id
+            elif business_type == "invoice":
+                invoice = InvoiceRequest.objects.filter(request_no=identifier).first()
+                business_id = invoice.id if invoice else None
+            elif business_type == "after_sales":
+                after_sale = AfterSalesRequest.objects.filter(request_no=identifier).first()
+                business_id = after_sale.id if after_sale else None
+            if business_id:
+                self.create_demo_attachment(
+                    business_type=business_type,
+                    business_id=business_id,
+                    file_name=file_name,
+                    content=content,
+                    uploader=admin,
+                )
 
         self.stdout.write(self.style.SUCCESS(f"初始化完成：admin / admin123456，已准备 {len(orders_data)} 条演示订单"))

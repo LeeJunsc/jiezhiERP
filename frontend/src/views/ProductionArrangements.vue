@@ -87,6 +87,20 @@
 
       <div class="detail-section finalize-section">
         <h3>生产确认</h3>
+        <el-form label-position="top" class="compact-form">
+          <el-form-item label="代工工厂">
+            <el-input v-model="factoryName" placeholder="填写本单安排的代工工厂" />
+          </el-form-item>
+          <el-form-item label="预计完成时间">
+            <el-date-picker
+              v-model="plannedFinishAt"
+              type="datetime"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              placeholder="选择预计完成时间"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </el-form>
         <el-input v-model="productionRemark" type="textarea" :rows="3" placeholder="填写生产安排备注、代工特殊要求或异常说明" />
         <el-upload
           v-model:file-list="productionFiles"
@@ -126,6 +140,8 @@ const currentOrder = ref<any>(null)
 const productionFiles = ref<any[]>([])
 const productionAttachments = ref<any[]>([])
 const productionRemark = ref('')
+const factoryName = ref('')
+const plannedFinishAt = ref('')
 const uploadingCount = ref(0)
 const confirming = ref(false)
 const uploadedFileUids = new Set<string>()
@@ -147,6 +163,8 @@ async function openProductionDetail(arrangement: any) {
   currentArrangement.value = arrangement
   productionFiles.value = []
   productionRemark.value = arrangement.remark || ''
+  factoryName.value = arrangement.factory_name || ''
+  plannedFinishAt.value = arrangement.planned_finish_at || ''
   uploadedFileUids.clear()
   const [orderResponse] = await Promise.all([
     api.get(`/orders/${arrangement.order.id}/`),
@@ -189,8 +207,17 @@ async function confirmProduction() {
   confirming.value = true
   try {
     let arrangement = currentArrangement.value
-    if (productionRemark.value.trim() !== (arrangement.remark || '')) {
-      const remarkResponse = await api.patch(`/production-arrangements/${arrangement.id}/`, { remark: productionRemark.value.trim() })
+    const patchPayload = {
+      factory_name: factoryName.value.trim(),
+      planned_finish_at: plannedFinishAt.value || null,
+      remark: productionRemark.value.trim()
+    }
+    if (
+      patchPayload.factory_name !== (arrangement.factory_name || '') ||
+      patchPayload.planned_finish_at !== (arrangement.planned_finish_at || null) ||
+      patchPayload.remark !== (arrangement.remark || '')
+    ) {
+      const remarkResponse = await api.patch(`/production-arrangements/${arrangement.id}/`, patchPayload)
       arrangement = remarkResponse.data
       currentArrangement.value = arrangement
     }

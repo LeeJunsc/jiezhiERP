@@ -1,0 +1,40 @@
+PERMISSION_CATALOG = [
+    {"code": "orders.view_order", "label": "查看订单", "group": "订单"},
+    {"code": "orders.add_order", "label": "新建订单", "group": "订单"},
+    {"code": "orders.change_order", "label": "编辑/提交/取消订单", "group": "订单"},
+    {"code": "orders.delete_order", "label": "删除订单", "group": "订单"},
+    {"code": "customers.view_customer", "label": "查看客户", "group": "客户"},
+    {"code": "customers.add_customer", "label": "新建客户", "group": "客户"},
+    {"code": "customers.change_customer", "label": "编辑客户", "group": "客户"},
+    {"code": "customers.delete_customer", "label": "删除客户", "group": "客户"},
+    {"code": "design.view_designtask", "label": "查看设计任务", "group": "设计"},
+    {"code": "design.change_designtask", "label": "领取/确认设计任务", "group": "设计"},
+    {"code": "production.view_productionarrangement", "label": "查看生产安排", "group": "生产"},
+    {"code": "production.change_productionarrangement", "label": "生产确认", "group": "生产"},
+    {"code": "finance.view_invoicerequest", "label": "查看发票申请", "group": "财务"},
+    {"code": "finance.change_invoicerequest", "label": "审批发票申请", "group": "财务"},
+    {"code": "after_sales.view_aftersalesrequest", "label": "查看售后申请", "group": "售后"},
+    {"code": "after_sales.change_aftersalesrequest", "label": "处理售后申请", "group": "售后"},
+    {"code": "stores.view_store", "label": "查看店铺", "group": "系统管理"},
+    {"code": "stores.change_store", "label": "维护店铺", "group": "系统管理"},
+    {"code": "orders.view_designoption", "label": "查看设计流程", "group": "系统管理"},
+    {"code": "orders.change_designoption", "label": "维护设计流程", "group": "系统管理"},
+    {"code": "system_settings.view_paymentchannel", "label": "查看收款渠道", "group": "系统管理"},
+    {"code": "system_settings.change_paymentchannel", "label": "维护收款渠道", "group": "系统管理"},
+    {"code": "attachments.view_attachment", "label": "查看附件", "group": "附件"},
+    {"code": "attachments.add_attachment", "label": "上传附件", "group": "附件"},
+    {"code": "attachments.delete_attachment", "label": "删除附件", "group": "附件"},
+    {"code": "auth.view_user", "label": "查看用户", "group": "用户管理"},
+    {"code": "auth.add_user", "label": "新建用户", "group": "用户管理"},
+    {"code": "auth.change_user", "label": "编辑用户", "group": "用户管理"},
+    {"code": "auth.delete_user", "label": "删除用户", "group": "用户管理"},
+    {"code": "auth.view_group", "label": "查看角色", "group": "用户管理"},
+    {"code": "auth.add_group", "label": "新建角色", "group": "用户管理"},
+    {"code": "auth.change_group", "label": "编辑角色权限", "group": "用户管理"},
+    {"code": "auth.delete_group", "label": "删除角色", "group": "用户管理"},
+]
+
+
+def split_permission_code(code):
+    app_label, codename = code.split(".", 1)
+    return app_label, codename

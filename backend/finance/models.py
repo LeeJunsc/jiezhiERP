@@ -23,6 +23,7 @@ class InvoiceRequest(TimeStampedModel):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     title = models.CharField(max_length=200)
     tax_number = models.CharField(max_length=80, blank=True)
+    remark = models.TextField(blank=True)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING)
     applicant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="invoice_applications")
     approver = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoice_approvals")

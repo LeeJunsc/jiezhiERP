@@ -1,15 +1,24 @@
-from django.db.models import Q, Sum
+from django.db.models import Prefetch, Q, Sum
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from after_sales.models import AfterSalesRequest
+from after_sales.serializers import AfterSalesRequestSerializer
+from attachments.models import Attachment
+from attachments.serializers import AttachmentSerializer
 from audit.models import OperationLog
 from audit.serializers import OperationLogSerializer
 from common.permissions import IsAdminRole, IsSalesOrAdmin
+from design.serializers import DesignTaskSerializer
+from finance.models import InvoiceRequest
+from finance.serializers import InvoiceRequestSerializer
 from orders.models import DesignOption, Order
 from orders.serializers import DesignOptionSerializer, OrderListSerializer, OrderSerializer
 from orders.services import cancel_order, submit_order
+from production.serializers import ProductionArrangementSerializer
 
 
 class DesignOptionViewSet(viewsets.ModelViewSet):
@@ -48,8 +57,23 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = (
-            Order.objects.select_related("store", "customer", "salesperson", "design_option", "payment_channel")
-            .prefetch_related("items")
+            Order.objects.select_related(
+                "store",
+                "customer",
+                "salesperson",
+                "design_option",
+                "payment_channel",
+                "design_task",
+                "production_arrangement",
+            )
+            .prefetch_related(
+                "items",
+                Prefetch(
+                    "invoice_requests",
+                    queryset=InvoiceRequest.objects.order_by("created_at"),
+                    to_attr="prefetched_invoice_requests",
+                ),
+            )
             .order_by("-created_at")
         )
         params = self.request.query_params
@@ -68,6 +92,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 | Q(customer__address__icontains=keyword)
                 | Q(store__name__icontains=keyword)
                 | Q(store__platform__icontains=keyword)
+                | Q(store__custom_platform__icontains=keyword)
                 | Q(design_option__name__icontains=keyword)
                 | Q(payment_status__icontains=keyword)
                 | Q(payment_channel__name__icontains=keyword)
@@ -120,6 +145,68 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         logs = OperationLog.objects.filter(business_type="Order", business_id=order.id).order_by("-created_at")
         return Response(OperationLogSerializer(logs, many=True).data)
+
+    @action(detail=True, methods=["get"])
+    def related(self, request, pk=None):
+        order = self.get_object()
+        context = {"request": request}
+
+        try:
+            design_task = order.design_task
+        except ObjectDoesNotExist:
+            design_task = None
+
+        try:
+            production_arrangement = order.production_arrangement
+        except ObjectDoesNotExist:
+            production_arrangement = None
+
+        invoices = InvoiceRequest.objects.filter(order=order).select_related("customer", "applicant", "approver").order_by("-created_at")
+        after_sales = AfterSalesRequest.objects.filter(order=order).select_related("order", "order__store", "order__customer", "owner").order_by("-created_at")
+
+        attachment_targets = [("order", order.id)]
+        if design_task:
+            attachment_targets.append(("design", design_task.id))
+        if production_arrangement:
+            attachment_targets.append(("production", production_arrangement.id))
+        attachment_targets.extend(("invoice", invoice.id) for invoice in invoices)
+        attachment_targets.extend(("after_sales", item.id) for item in after_sales)
+
+        attachments_by_key = {}
+        for business_type, business_id in attachment_targets:
+            attachments_by_key[f"{business_type}:{business_id}"] = []
+        attachment_filter = Q()
+        for business_type, business_id in attachment_targets:
+            attachment_filter |= Q(business_type=business_type, business_id=business_id)
+        if attachment_filter:
+            attachments = Attachment.objects.filter(attachment_filter).order_by("-created_at")
+            for attachment in attachments:
+                key = f"{attachment.business_type}:{attachment.business_id}"
+                attachments_by_key.setdefault(key, []).append(AttachmentSerializer(attachment, context=context).data)
+
+        return Response(
+            {
+                "order_attachments": attachments_by_key.get(f"order:{order.id}", []),
+                "design_task": DesignTaskSerializer(design_task, context=context).data if design_task else None,
+                "design_attachments": attachments_by_key.get(f"design:{design_task.id}", []) if design_task else [],
+                "production_arrangement": ProductionArrangementSerializer(production_arrangement, context=context).data if production_arrangement else None,
+                "production_attachments": attachments_by_key.get(f"production:{production_arrangement.id}", []) if production_arrangement else [],
+                "invoice_requests": [
+                    {
+                        **InvoiceRequestSerializer(invoice, context=context).data,
+                        "attachments": attachments_by_key.get(f"invoice:{invoice.id}", []),
+                    }
+                    for invoice in invoices
+                ],
+                "after_sales_requests": [
+                    {
+                        **AfterSalesRequestSerializer(item, context=context).data,
+                        "attachments": attachments_by_key.get(f"after_sales:{item.id}", []),
+                    }
+                    for item in after_sales
+                ],
+            }
+        )
 
     @action(detail=False, methods=["get"])
     def summary(self, request):

@@ -1,6 +1,6 @@
 <template>
   <router-view v-if="isLoginPage" />
-  <div v-else class="app-shell">
+  <div v-else-if="authReady && auth.user" class="app-shell">
     <aside class="sidebar">
       <div class="brand">
         <img class="brand-logo" :src="logoWhite" alt="介知包装" />
@@ -24,10 +24,11 @@
       <router-view />
     </main>
   </div>
+  <div v-else class="app-loading">加载中...</div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import logoWhite from './assets/jiezhi-logo-square-white.png'
@@ -36,6 +37,7 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const now = ref(new Date())
+const authReady = ref(false)
 let timer: number | undefined
 
 const navItems = [
@@ -45,6 +47,8 @@ const navItems = [
   { path: '/orders/new', label: '新建订单' },
   { path: '/design-tasks', label: '设计任务' },
   { path: '/production-arrangements', label: '生产安排' },
+  { path: '/invoice-requests', label: '发票审批' },
+  { path: '/after-sales-requests', label: '售后处理' },
   { path: '/customers', label: '客户管理' },
   { path: '/system', label: '系统管理' }
 ]
@@ -67,11 +71,27 @@ onMounted(async () => {
   timer = window.setInterval(() => {
     now.value = new Date()
   }, 1000 * 30)
-  if (!isLoginPage.value) {
-    await auth.loadMe()
-    if (!auth.user) router.push('/login')
-  }
 })
+
+watch(
+  () => route.path,
+  async () => {
+    if (isLoginPage.value) {
+      authReady.value = true
+      return
+    }
+    authReady.value = false
+    if (!auth.user) {
+      await auth.loadMe()
+    }
+    if (!auth.user) {
+      await router.push('/login')
+      return
+    }
+    authReady.value = true
+  },
+  { immediate: true }
+)
 
 onUnmounted(() => {
   if (timer) window.clearInterval(timer)
