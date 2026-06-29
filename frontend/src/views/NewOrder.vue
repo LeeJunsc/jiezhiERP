@@ -4,7 +4,6 @@
       <h2>新建订单</h2>
       <div class="actions mobile-action-bar">
         <el-button :icon="ArrowLeft" @click="$router.push('/orders')">取消</el-button>
-        <el-button :icon="Document" :loading="saving" @click="saveDraft">保存草稿</el-button>
         <el-button type="primary" :icon="Promotion" :loading="submitting" @click="submitOrder">提交订单</el-button>
       </div>
     </div>
@@ -174,8 +173,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { ArrowLeft, Check, Close, Document, Promotion, UploadFilled } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowLeft, Check, Close, Promotion, UploadFilled } from '@element-plus/icons-vue'
 import { api, create, list } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 
@@ -188,7 +187,6 @@ const paymentChannels = ref<any[]>([])
 const customerLoading = ref(false)
 const customerDialogVisible = ref(false)
 const draftFiles = ref<any[]>([])
-const saving = ref(false)
 const submitting = ref(false)
 const items = ref([
   { local_id: 1, product_name: '定制亚克力展示架', sku: '', quantity: 1, unit_price: 0 }
@@ -220,10 +218,13 @@ const customerForm = reactive({
   line: '',
   tags: ''
 })
-const systemOrderNo = computed(() => form.order_no || '保存时自动生成')
+const systemOrderNo = computed(() => form.order_no || '提交时自动生成')
 const itemsTotal = computed(() => items.value.reduce((sum, row) => sum + productLineAmount(row), 0))
+const localDraftKey = 'jiezhi.newOrder.localDraft'
+let restoringLocalDraft = false
 
 onMounted(async () => {
+  restoringLocalDraft = true
   await auth.loadMe()
   form.salesperson = auth.user?.id
   stores.value = (await list<any>('/stores', { status: 'enabled' })).results
@@ -234,11 +235,14 @@ onMounted(async () => {
   form.customer = customers.value[0]?.id
   form.design_option = designOptions.value[0]?.id
   form.payment_channel = paymentChannels.value.find((channel) => channel.is_default)?.id || paymentChannels.value[0]?.id
+  restoreLocalDraft()
+  restoringLocalDraft = false
 })
 
 watch(
   () => form.customer,
   (customerId) => {
+    if (restoringLocalDraft) return
     const customer = customers.value.find((item) => item.id === customerId)
     if (!customer) return
     shipping.receiver = customer.name
@@ -250,10 +254,20 @@ watch(
 watch(
   items,
   () => {
+    if (restoringLocalDraft) return
     form.total_amount = Number(itemsTotal.value.toFixed(2))
     if (form.payment_status === 'paid') {
       form.paid_amount = form.total_amount
     }
+  },
+  { deep: true }
+)
+
+watch(
+  [form, shipping, items],
+  () => {
+    if (restoringLocalDraft) return
+    saveLocalDraft()
   },
   { deep: true }
 )
@@ -282,8 +296,18 @@ function addProduct() {
   items.value.push({ local_id: nextItemId++, product_name: '', sku: '', quantity: 1, unit_price: 0 })
 }
 
-function removeProduct(localId: number) {
+async function removeProduct(localId: number) {
   if (items.value.length === 1) return
+  try {
+    await ElMessageBox.confirm('确认删除该产品 / SKU？', '删除产品', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger'
+    })
+  } catch {
+    return
+  }
   items.value = items.value.filter((row) => row.local_id !== localId)
 }
 
@@ -383,30 +407,51 @@ async function uploadDraftFiles(orderId: string) {
   }
 }
 
-async function saveDraft() {
-  if (saving.value || submitting.value) return
-  saving.value = true
-  try {
-    const order = await createOrder()
-    if (!order) return
-    ElMessage.success('订单草稿已保存')
-    router.push(`/orders/${order.id}`)
-  } finally {
-    saving.value = false
-  }
-}
-
 async function submitOrder() {
-  if (saving.value || submitting.value) return
+  if (submitting.value) return
   submitting.value = true
   try {
     const order = await createOrder()
     if (!order) return
     await api.post(`/orders/${order.id}/submit/`)
+    clearLocalDraft()
     ElMessage.success('订单已提交')
     router.push(`/orders/${order.id}`)
+  } catch (error: any) {
+    const detail = error?.response?.data
+    const message = detail?.platform_order_no?.[0] || detail?.message || detail?.detail || '订单提交失败，请检查填写内容'
+    ElMessage.error(message)
   } finally {
     submitting.value = false
   }
+}
+
+function saveLocalDraft() {
+  const payload = {
+    form: { ...form },
+    shipping: { ...shipping },
+    items: items.value.map((item) => ({ ...item })),
+    nextItemId
+  }
+  window.localStorage.setItem(localDraftKey, JSON.stringify(payload))
+}
+
+function restoreLocalDraft() {
+  const raw = window.localStorage.getItem(localDraftKey)
+  if (!raw) return
+  try {
+    const draft = JSON.parse(raw)
+    if (draft?.form) Object.assign(form, draft.form)
+    if (draft?.shipping) Object.assign(shipping, draft.shipping)
+    if (Array.isArray(draft?.items) && draft.items.length) items.value = draft.items
+    if (Number(draft?.nextItemId)) nextItemId = Number(draft.nextItemId)
+    ElMessage.info('已恢复上次未提交的订单内容')
+  } catch {
+    window.localStorage.removeItem(localDraftKey)
+  }
+}
+
+function clearLocalDraft() {
+  window.localStorage.removeItem(localDraftKey)
 }
 </script>

@@ -109,7 +109,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         if params.get("store_id"):
             queryset = queryset.filter(store_id=params["store_id"])
         if params.get("status"):
-            queryset = queryset.filter(status=params["status"])
+            statuses = [status for status in params["status"].split(",") if status]
+            queryset = queryset.filter(status__in=statuses)
         if params.get("salesperson_id"):
             queryset = queryset.filter(salesperson_id=params["salesperson_id"])
         if params.get("created_from"):

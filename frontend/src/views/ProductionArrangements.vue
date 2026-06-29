@@ -5,7 +5,13 @@
         <h2>生产安排</h2>
         <small>待处理订单 {{ pendingCount }} 单</small>
       </div>
-      <el-button @click="load">刷新</el-button>
+      <div class="actions">
+        <el-button @click="load">刷新</el-button>
+        <el-button-group>
+          <el-button :type="viewMode === 'pending' ? 'primary' : 'default'" @click="switchViewMode('pending')">待处理</el-button>
+          <el-button :type="viewMode === 'recent' ? 'primary' : 'default'" @click="switchViewMode('recent')">最近完成</el-button>
+        </el-button-group>
+      </div>
     </div>
     <el-table :data="rows" border>
       <el-table-column prop="arrangement_no" label="安排号" width="160" />
@@ -15,9 +21,9 @@
       <el-table-column label="状态" width="120">
         <template #default="{ row }">{{ productionStatusLabel(row.status) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column label="操作" width="90" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" type="primary" @click="openProductionDetail(row)" :disabled="row.status === 'confirmed'">生产确认</el-button>
+          <el-button size="small" @click="openProductionDetail(row)">详情</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -101,7 +107,7 @@
             />
           </el-form-item>
         </el-form>
-        <el-input v-model="productionRemark" type="textarea" :rows="3" placeholder="填写生产安排备注、代工特殊要求或异常说明" />
+        <el-input v-model="productionRemark" type="textarea" :rows="3" placeholder="填写生产安排备注、代工特殊要求或处理说明" />
         <el-upload
           v-model:file-list="productionFiles"
           action="#"
@@ -114,7 +120,9 @@
           <div class="el-upload__text">拖拽生产素材或文件到此处，或点击添加，选择后自动上传</div>
         </el-upload>
         <div class="upload-actions">
-          <el-button type="primary" :loading="confirming" :disabled="!canConfirmProduction" @click="confirmProduction">生产确认</el-button>
+          <el-button plain :loading="returning" :disabled="!canHandleProduction" @click="returnToDesign">退回设计</el-button>
+          <el-button type="primary" :loading="confirming" :disabled="!canHandleProduction" @click="confirmProduction">生产确认</el-button>
+          <el-button type="danger" plain :loading="rejecting" :disabled="!canHandleProduction" @click="rejectOrder">驳回订单</el-button>
         </div>
         <div v-if="productionAttachments.length" class="attachment-list">
           <a v-for="file in productionAttachments" :key="file.id" :href="file.file_url" target="_blank" rel="noreferrer">
@@ -128,12 +136,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { api, list } from '../api/client'
 
 const rows = ref<any[]>([])
 const pendingCount = ref(0)
+const viewMode = ref<'pending' | 'recent'>('pending')
 const detailVisible = ref(false)
 const currentArrangement = ref<any>(null)
 const currentOrder = ref<any>(null)
@@ -144,19 +153,35 @@ const factoryName = ref('')
 const plannedFinishAt = ref('')
 const uploadingCount = ref(0)
 const confirming = ref(false)
+const returning = ref(false)
+const rejecting = ref(false)
 const uploadedFileUids = new Set<string>()
 const uploading = computed(() => uploadingCount.value > 0)
-const canConfirmProduction = computed(() => Boolean(currentArrangement.value && currentArrangement.value.status !== 'confirmed' && !uploading.value))
+const canHandleProduction = computed(() =>
+  Boolean(
+    currentArrangement.value &&
+      !['confirmed', 'exception'].includes(currentArrangement.value.status) &&
+      !['completed', 'cancelled'].includes(currentOrder.value?.status) &&
+      !uploading.value
+  )
+)
 
 async function load() {
-  const [arrangementPage, pendingPage, scheduledPage, exceptionPage] = await Promise.all([
-    list<any>('/production-arrangements'),
-    list<any>('/production-arrangements', { status: 'pending', page_size: 1 }),
-    list<any>('/production-arrangements', { status: 'scheduled', page_size: 1 }),
-    list<any>('/production-arrangements', { status: 'exception', page_size: 1 })
+  const pendingStatuses = 'pending,scheduled,exception'
+  const [pendingPage, activePage] = await Promise.all([
+    list<any>('/production-arrangements', { status: 'pending,scheduled', page_size: 1 }),
+    viewMode.value === 'pending'
+      ? list<any>('/production-arrangements', { status: pendingStatuses, page_size: 100 })
+      : list<any>('/production-arrangements', { status: 'confirmed', ordering: 'recent_completed', page_size: 30 })
   ])
-  rows.value = arrangementPage.results
-  pendingCount.value = pendingPage.count + scheduledPage.count + exceptionPage.count
+  pendingCount.value = pendingPage.count
+  rows.value = activePage.results
+}
+
+async function switchViewMode(mode: 'pending' | 'recent') {
+  if (viewMode.value === mode) return
+  viewMode.value = mode
+  await load()
 }
 
 async function openProductionDetail(arrangement: any) {
@@ -204,6 +229,15 @@ async function handleProductionFileChange(file: any) {
 
 async function confirmProduction() {
   if (!currentArrangement.value) return
+  try {
+    await ElMessageBox.confirm(`确认生产完成订单 ${currentOrder.value?.order_no || ''}？`, '生产确认', {
+      confirmButtonText: '生产确认',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
   confirming.value = true
   try {
     let arrangement = currentArrangement.value
@@ -223,11 +257,60 @@ async function confirmProduction() {
     }
     const response = await api.post(`/production-arrangements/${arrangement.id}/confirm/`)
     currentArrangement.value = response.data
-    ElMessage.success('生产已确认，订单完成')
+    ElMessage.success('订单已完成')
     detailVisible.value = false
     await load()
   } finally {
     confirming.value = false
+  }
+}
+
+async function returnToDesign() {
+  if (!currentArrangement.value) return
+  try {
+    await ElMessageBox.confirm(`确认将订单 ${currentOrder.value?.order_no || ''} 退回设计？`, '退回设计', {
+      confirmButtonText: '退回设计',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  returning.value = true
+  try {
+    await api.post(`/production-arrangements/${currentArrangement.value.id}/return-to-design/`, {
+      remark: productionRemark.value.trim()
+    })
+    ElMessage.success('订单已退回设计')
+    detailVisible.value = false
+    await load()
+  } finally {
+    returning.value = false
+  }
+}
+
+async function rejectOrder() {
+  if (!currentArrangement.value) return
+  try {
+    await ElMessageBox.confirm(`确认驳回订单 ${currentOrder.value?.order_no || ''}？`, '驳回订单', {
+      confirmButtonText: '驳回订单',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger'
+    })
+  } catch {
+    return
+  }
+  rejecting.value = true
+  try {
+    await api.post(`/production-arrangements/${currentArrangement.value.id}/reject-order/`, {
+      remark: productionRemark.value.trim()
+    })
+    ElMessage.success('订单已驳回')
+    detailVisible.value = false
+    await load()
+  } finally {
+    rejecting.value = false
   }
 }
 
@@ -239,22 +322,22 @@ function productionStatusLabel(status: string) {
   const labels: Record<string, string> = {
     pending: '待安排',
     scheduled: '已安排',
-    confirmed: '已确认',
-    exception: '异常'
+    confirmed: '已安排',
+    exception: '已驳回'
   }
   return labels[status] || status
 }
 
 function orderStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    draft: '草稿',
-    submitted: '已提交',
+    draft: '待设计',
+    submitted: '待设计',
     pending_design: '待设计',
-    designing: '设计中',
-    design_confirmed: '设计确认',
-    pending_production: '待生产安排',
+    designing: '待设计',
+    design_confirmed: '待生产',
+    pending_production: '待生产',
     completed: '已完成',
-    cancelled: '已取消'
+    cancelled: '已撤销'
   }
   return labels[status] || status
 }

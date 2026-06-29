@@ -133,6 +133,35 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "status", "submitted_at", "completed_at", "created_at", "updated_at"]
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance and self.instance.status == Order.Status.CANCELLED:
+            return attrs
+
+        platform_order_no = (attrs.get("platform_order_no") or getattr(self.instance, "platform_order_no", "") or "").strip()
+        if not platform_order_no:
+            attrs["platform_order_no"] = ""
+            return attrs
+
+        duplicate_queryset = (
+            Order.objects.filter(platform_order_no=platform_order_no)
+            .exclude(status=Order.Status.CANCELLED)
+            .only("id", "order_no")
+        )
+        if self.instance:
+            duplicate_queryset = duplicate_queryset.exclude(id=self.instance.id)
+
+        duplicate = duplicate_queryset.first()
+        if duplicate:
+            raise serializers.ValidationError(
+                {
+                    "platform_order_no": f"平台订单号已存在，关联订单：{duplicate.order_no}。非撤销订单不允许重复提交。"
+                }
+            )
+
+        attrs["platform_order_no"] = platform_order_no
+        return attrs
+
     def get_design_finalized_at(self, obj):
         try:
             return obj.design_task.confirmed_at

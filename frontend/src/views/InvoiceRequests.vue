@@ -62,20 +62,20 @@
       <el-table-column label="状态" width="100">
         <template #default="{ row }">{{ statusLabel(row.status) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="90" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="openDetail(row)">详情</el-button>
-          <el-button v-if="canApprove && row.status === 'pending'" size="small" type="primary" @click="approve(row)">通过</el-button>
-          <el-button v-if="canApprove && row.status === 'pending'" size="small" type="danger" plain @click="reject(row)">驳回</el-button>
         </template>
       </el-table-column>
     </el-table>
     <div class="actions">
       <el-pagination
-        layout="prev, pager, next"
+        layout="sizes, prev, pager, next"
+        :page-sizes="pageSizeOptions"
         :total="total"
-        :page-size="20"
+        :page-size="pageSize"
         :current-page="page"
+        @size-change="handlePageSizeChange"
         @current-change="page = $event; load()"
       />
     </div>
@@ -146,11 +146,13 @@ import { UploadFilled } from '@element-plus/icons-vue'
 import { api, list } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { dateRangeShortcuts } from '../utils/dateShortcuts'
+import { pageSizeOptions } from '../utils/pagination'
 
 const auth = useAuthStore()
 const rows = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
+const pageSize = ref(20)
 const pendingCount = ref(0)
 const dateRange = ref<string[]>([])
 const detailVisible = ref(false)
@@ -158,7 +160,7 @@ const current = ref<any>(null)
 const invoiceFiles = ref<any[]>([])
 const invoiceAttachments = ref<any[]>([])
 const uploadingFileUids = new Set<string>()
-const filters = reactive({ keyword: '', status: '' })
+const filters = reactive({ keyword: '', status: 'pending' })
 const summary = reactive({ request_count: 0, total_amount: '0.00' })
 const canApprove = computed(() => Boolean(auth.user?.is_superuser || auth.user?.groups?.some((group) => ['管理员', '财务'].includes(group.name))))
 
@@ -174,7 +176,7 @@ function queryParams() {
 async function load() {
   const params = queryParams()
   const [data, summaryResponse, pendingPage] = await Promise.all([
-    list<any>('/invoice-requests', { page: page.value, page_size: 20, ...params }),
+    list<any>('/invoice-requests', { page: page.value, page_size: pageSize.value, ...params }),
     api.get('/invoice-requests/summary/', { params }),
     list<any>('/invoice-requests', { status: 'pending', page_size: 1 })
   ])
@@ -184,6 +186,12 @@ async function load() {
   pendingCount.value = pendingPage.count
 }
 
+async function handlePageSizeChange(size: number) {
+  pageSize.value = size
+  page.value = 1
+  await load()
+}
+
 async function search() {
   page.value = 1
   await load()
@@ -191,7 +199,7 @@ async function search() {
 
 async function resetFilters() {
   filters.keyword = ''
-  filters.status = ''
+  filters.status = 'pending'
   dateRange.value = []
   await search()
 }

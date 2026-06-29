@@ -36,7 +36,8 @@ class AfterSalesRequestViewSet(viewsets.ModelViewSet):
                 | Q(solution__icontains=keyword)
             )
         if params.get("status"):
-            queryset = queryset.filter(status=params["status"])
+            statuses = [status for status in params["status"].split(",") if status]
+            queryset = queryset.filter(status__in=statuses)
         if params.get("type"):
             queryset = queryset.filter(type=params["type"])
         if params.get("created_from"):

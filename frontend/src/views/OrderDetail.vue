@@ -4,12 +4,12 @@
       <h2>订单 {{ order.order_no }}</h2>
       <div class="actions mobile-action-bar">
         <el-button :icon="ArrowLeft" @click="$router.push('/orders')">返回</el-button>
-        <el-button :icon="Close" type="danger" plain @click="cancel" :loading="cancelling" :disabled="!canCancel">取消订单</el-button>
+        <el-button :icon="Close" type="danger" plain @click="cancel" :loading="cancelling" :disabled="!canCancel">撤销订单</el-button>
         <el-button type="primary" :icon="Promotion" @click="submit" :loading="submitting" :disabled="order.status !== 'draft'">提交订单</el-button>
       </div>
     </div>
     <el-descriptions border :column="3">
-      <el-descriptions-item label="状态">{{ order.status }}</el-descriptions-item>
+      <el-descriptions-item label="状态">{{ statusLabel(order.status) }}</el-descriptions-item>
       <el-descriptions-item label="店铺">{{ order.store }}</el-descriptions-item>
       <el-descriptions-item label="客户">{{ order.customer }}</el-descriptions-item>
       <el-descriptions-item label="设计处理方式">{{ order.design_option }}</el-descriptions-item>
@@ -58,7 +58,7 @@ async function cancel() {
   cancelling.value = true
   try {
     await api.post(`/orders/${route.params.id}/cancel/`)
-    ElMessage.success('订单已取消')
+    ElMessage.success('订单已撤销')
     await load()
   } finally {
     cancelling.value = false
@@ -66,4 +66,18 @@ async function cancel() {
 }
 
 onMounted(load)
+
+function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    draft: '待设计',
+    submitted: '待设计',
+    pending_design: '待设计',
+    designing: '待设计',
+    design_confirmed: '待生产',
+    pending_production: '待生产',
+    completed: '已完成',
+    cancelled: '已撤销'
+  }
+  return labels[status] || status
+}
 </script>

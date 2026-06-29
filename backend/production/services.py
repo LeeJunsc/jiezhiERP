@@ -3,8 +3,14 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from audit.services import write_log
+from design.models import DesignTask
 from orders.models import Order
+from orders.numbering import build_number
 from production.models import ProductionArrangement
+
+
+def next_design_task_no():
+    return build_number("JZD", DesignTask, "task_no")
 
 
 @transaction.atomic
@@ -39,4 +45,59 @@ def confirm_arrangement(arrangement, actor):
 
     write_log(actor, arrangement, "confirm_production_arrangement", before=before, after={"status": arrangement.status})
     write_log(actor, order, "order_completed", after={"status": order.status})
+    return arrangement
+
+
+@transaction.atomic
+def return_arrangement_to_design(arrangement, actor, remark=""):
+    if arrangement.status == ProductionArrangement.Status.CONFIRMED:
+        raise ValidationError("已完成订单不能退回设计。")
+
+    before = {"status": arrangement.status}
+    arrangement.owner = arrangement.owner or actor
+    arrangement.status = ProductionArrangement.Status.EXCEPTION
+    arrangement.remark = remark or arrangement.remark
+    arrangement.save(update_fields=["owner", "status", "remark", "updated_at"])
+
+    order = arrangement.order
+    task, created = DesignTask.objects.get_or_create(
+        order=order,
+        defaults={
+            "task_no": next_design_task_no(),
+            "status": DesignTask.Status.PENDING,
+            "remark": remark,
+            "created_by": actor,
+        },
+    )
+    if not created:
+        task.status = DesignTask.Status.NEEDS_CHANGES
+        task.remark = remark or task.remark
+        task.save(update_fields=["status", "remark", "updated_at"])
+
+    order.status = Order.Status.PENDING_DESIGN
+    order.save(update_fields=["status", "updated_at"])
+
+    write_log(actor, arrangement, "return_production_to_design", before=before, after={"status": arrangement.status})
+    write_log(actor, order, "returned_to_design", after={"status": order.status})
+    return arrangement
+
+
+@transaction.atomic
+def reject_arrangement_order(arrangement, actor, remark=""):
+    if arrangement.status == ProductionArrangement.Status.CONFIRMED:
+        raise ValidationError("已完成订单不能驳回。")
+
+    before = {"status": arrangement.status}
+    arrangement.owner = arrangement.owner or actor
+    arrangement.status = ProductionArrangement.Status.EXCEPTION
+    arrangement.remark = remark or arrangement.remark
+    arrangement.save(update_fields=["owner", "status", "remark", "updated_at"])
+
+    order = arrangement.order
+    order_before = {"status": order.status}
+    order.status = Order.Status.CANCELLED
+    order.save(update_fields=["status", "updated_at"])
+
+    write_log(actor, arrangement, "reject_production_arrangement", before=before, after={"status": arrangement.status})
+    write_log(actor, order, "reject_order_from_production", before=order_before, after={"status": order.status})
     return arrangement

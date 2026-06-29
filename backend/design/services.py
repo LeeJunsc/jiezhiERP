@@ -41,7 +41,7 @@ def confirm_design_task(task, actor):
     task.save(update_fields=["status", "confirmed_at", "updated_at"])
 
     order = task.order
-    ProductionArrangement.objects.get_or_create(
+    arrangement, created = ProductionArrangement.objects.get_or_create(
         order=order,
         defaults={
             "arrangement_no": next_production_arrangement_no(),
@@ -49,6 +49,9 @@ def confirm_design_task(task, actor):
             "created_by": actor,
         },
     )
+    if not created and arrangement.status != ProductionArrangement.Status.CONFIRMED:
+        arrangement.status = ProductionArrangement.Status.PENDING
+        arrangement.save(update_fields=["status", "updated_at"])
     order.status = Order.Status.PENDING_PRODUCTION
     order.save(update_fields=["status", "updated_at"])
 

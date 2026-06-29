@@ -30,13 +30,20 @@ function lastMonthRange() {
   return [start, end]
 }
 
+function currentMonthRange() {
+  const today = startOfToday()
+  const start = new Date(today.getFullYear(), today.getMonth(), 1)
+  return [start, today]
+}
+
 export const dateRangeShortcuts = [
   {
-    text: '过去7天',
-    value: () => {
-      const end = startOfToday()
-      return [addDays(end, -6), end]
-    }
+    text: '上月',
+    value: lastMonthRange
+  },
+  {
+    text: '本月',
+    value: currentMonthRange
   },
   {
     text: '过去30天',
@@ -44,9 +51,5 @@ export const dateRangeShortcuts = [
       const end = startOfToday()
       return [addDays(end, -29), end]
     }
-  },
-  {
-    text: '上个月',
-    value: lastMonthRange
   }
 ]

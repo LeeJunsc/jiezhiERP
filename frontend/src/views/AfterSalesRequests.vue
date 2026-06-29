@@ -14,6 +14,7 @@
       </el-form-item>
       <el-form-item label="状态">
         <el-select v-model="filters.status" clearable placeholder="全部" style="width: 150px">
+          <el-option label="待处理" value="pending_processing" />
           <el-option label="待受理" value="pending" />
           <el-option label="处理中" value="processing" />
           <el-option label="已完成" value="completed" />
@@ -67,20 +68,20 @@
         <template #default="{ row }">{{ statusLabel(row.status) }}</template>
       </el-table-column>
       <el-table-column prop="description" label="问题说明" min-width="220" show-overflow-tooltip />
-      <el-table-column label="操作" width="210" fixed="right">
+      <el-table-column label="操作" width="90" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="openDetail(row)">详情</el-button>
-          <el-button v-if="canHandle && row.status === 'pending'" size="small" type="primary" @click="openHandle(row, 'start')">受理</el-button>
-          <el-button v-if="canHandle && ['pending', 'processing'].includes(row.status)" size="small" type="success" @click="openHandle(row, 'complete')">完成</el-button>
         </template>
       </el-table-column>
     </el-table>
     <div class="actions">
       <el-pagination
-        layout="prev, pager, next"
+        layout="sizes, prev, pager, next"
+        :page-sizes="pageSizeOptions"
         :total="total"
-        :page-size="20"
+        :page-size="pageSize"
         :current-page="page"
+        @size-change="handlePageSizeChange"
         @current-change="page = $event; load()"
       />
     </div>
@@ -185,11 +186,13 @@ import { UploadFilled } from '@element-plus/icons-vue'
 import { api, list } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { dateRangeShortcuts } from '../utils/dateShortcuts'
+import { pageSizeOptions } from '../utils/pagination'
 
 const auth = useAuthStore()
 const rows = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
+const pageSize = ref(20)
 const pendingCount = ref(0)
 const dateRange = ref<string[]>([])
 const detailVisible = ref(false)
@@ -201,13 +204,16 @@ const afterSalesFiles = ref<any[]>([])
 const handleFiles = ref<any[]>([])
 const afterSalesAttachments = ref<any[]>([])
 const uploadedFileUids = new Set<string>()
-const filters = reactive({ keyword: '', status: '', type: '' })
+const filters = reactive({ keyword: '', status: 'pending_processing', type: '' })
 const canHandle = computed(() => Boolean(auth.user?.is_superuser || auth.user?.groups?.some((group) => ['管理员', '售后'].includes(group.name))))
 
 function queryParams() {
+  const statusMap: Record<string, string> = {
+    pending_processing: 'pending,processing'
+  }
   return {
     keyword: filters.keyword,
-    status: filters.status,
+    status: statusMap[filters.status] || filters.status,
     type: filters.type,
     created_from: dateRange.value?.[0] || '',
     created_to: dateRange.value?.[1] || ''
@@ -216,14 +222,19 @@ function queryParams() {
 
 async function load() {
   const params = queryParams()
-  const [data, pendingPage, processingPage] = await Promise.all([
-    list<any>('/after-sales-requests', { page: page.value, page_size: 20, ...params }),
-    list<any>('/after-sales-requests', { status: 'pending', page_size: 1 }),
-    list<any>('/after-sales-requests', { status: 'processing', page_size: 1 })
+  const [data, pendingPage] = await Promise.all([
+    list<any>('/after-sales-requests', { page: page.value, page_size: pageSize.value, ...params }),
+    list<any>('/after-sales-requests', { status: 'pending,processing', page_size: 1 })
   ])
   rows.value = data.results
   total.value = data.count
-  pendingCount.value = pendingPage.count + processingPage.count
+  pendingCount.value = pendingPage.count
+}
+
+async function handlePageSizeChange(size: number) {
+  pageSize.value = size
+  page.value = 1
+  await load()
 }
 
 async function search() {
@@ -233,7 +244,7 @@ async function search() {
 
 async function resetFilters() {
   filters.keyword = ''
-  filters.status = ''
+  filters.status = 'pending_processing'
   filters.type = ''
   dateRange.value = []
   await search()

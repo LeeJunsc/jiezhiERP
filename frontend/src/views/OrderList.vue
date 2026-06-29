@@ -2,7 +2,6 @@
   <section class="panel">
     <div class="panel-head">
       <h2>订单列表</h2>
-      <el-button type="primary" @click="$router.push('/orders/new')">新建订单</el-button>
     </div>
 
     <el-form inline :model="filters" class="search-bar">
@@ -11,12 +10,10 @@
       </el-form-item>
       <el-form-item label="状态">
         <el-select v-model="filters.status" clearable placeholder="全部" style="width: 160px">
-          <el-option label="草稿" value="draft" />
-          <el-option label="待设计" value="pending_design" />
-          <el-option label="设计中" value="designing" />
-          <el-option label="待生产安排" value="pending_production" />
+          <el-option label="待设计" value="design_pending" />
+          <el-option label="待生产" value="pending_production" />
           <el-option label="已完成" value="completed" />
-          <el-option label="已取消" value="cancelled" />
+          <el-option label="已撤销" value="cancelled" />
         </el-select>
       </el-form-item>
       <el-form-item label="下单日期">
@@ -31,46 +28,69 @@
           :shortcuts="dateRangeShortcuts"
         />
       </el-form-item>
-      <el-button type="primary" @click="search">查询</el-button>
-      <el-button @click="resetFilters">重置</el-button>
+      <el-form-item class="search-actions">
+        <el-button type="primary" @click="search">查询</el-button>
+        <el-button @click="resetFilters">重置</el-button>
+      </el-form-item>
     </el-form>
 
-    <div class="summary-strip">
-      <div>
-        <span>订单数</span>
-        <strong>{{ summary.order_count }}</strong>
-      </div>
-      <div>
-        <span>订单金额</span>
-        <strong>{{ money(summary.total_amount) }}</strong>
-      </div>
+    <div class="quick-filter-strip">
+      <el-button :type="filters.status === 'design_pending' ? 'primary' : 'default'" @click="quickFilter('design_pending')">待设计</el-button>
+      <el-button :type="filters.status === 'pending_production' ? 'primary' : 'default'" @click="quickFilter('pending_production')">待生产</el-button>
+      <el-button :type="filters.status === 'completed' ? 'primary' : 'default'" @click="quickFilter('completed')">已完成</el-button>
+      <el-button :type="filters.status === 'cancelled' ? 'primary' : 'default'" @click="quickFilter('cancelled')">已撤销</el-button>
+      <el-button v-if="filters.status" plain @click="quickFilter('')">全部</el-button>
     </div>
 
-    <el-table :data="rows" border>
-      <el-table-column prop="order_no" label="订单号" width="160" />
-      <el-table-column prop="platform_order_no" label="平台订单号" width="170" />
-      <el-table-column prop="store.name" label="店铺" min-width="130" />
-      <el-table-column prop="customer.name" label="客户" min-width="120" />
-      <el-table-column prop="design_option.name" label="设计处理方式" width="160" />
-      <el-table-column label="状态" width="130">
+    <el-table class="order-table" :data="rows" border>
+      <el-table-column v-if="isColumnVisible('order_no')" prop="order_no" label="订单号" width="160" />
+      <el-table-column v-if="isColumnVisible('platform_order_no')" prop="platform_order_no" label="平台订单号" width="170" />
+      <el-table-column v-if="isColumnVisible('store')" prop="store.name" label="店铺" min-width="130" />
+      <el-table-column v-if="isColumnVisible('customer')" prop="customer.name" label="客户" min-width="120" />
+      <el-table-column v-if="isColumnVisible('submitter')" label="提交人" width="120">
+        <template #default="{ row }">{{ row.salesperson_name || row.salesperson || '-' }}</template>
+      </el-table-column>
+      <el-table-column v-if="isColumnVisible('design_option')" prop="design_option.name" label="设计处理方式" width="160" />
+      <el-table-column v-if="isColumnVisible('status')" label="状态" width="130">
         <template #default="{ row }">{{ statusLabel(row.status) }}</template>
       </el-table-column>
-      <el-table-column label="金额" width="120">
+      <el-table-column v-if="isColumnVisible('amount')" label="金额" width="120">
         <template #default="{ row }">{{ money(row.total_amount) }}</template>
       </el-table-column>
-      <el-table-column label="订单生成时间" width="170">
+      <el-table-column v-if="isColumnVisible('created_at')" label="订单生成时间" width="170">
         <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="设计定稿时间" width="170">
+      <el-table-column v-if="isColumnVisible('design_finalized_at')" label="设计定稿时间" width="170">
         <template #default="{ row }">{{ formatDateTime(row.design_finalized_at) }}</template>
       </el-table-column>
-      <el-table-column label="生产安排时间" width="170">
+      <el-table-column v-if="isColumnVisible('production_arranged_at')" label="生产安排时间" width="170">
         <template #default="{ row }">{{ formatDateTime(row.production_arranged_at) }}</template>
       </el-table-column>
-      <el-table-column label="发票申请时间" width="170">
+      <el-table-column v-if="isColumnVisible('invoice_requested_at')" label="发票申请时间" width="170">
         <template #default="{ row }">{{ formatDateTime(row.invoice_requested_at) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="150" fixed="right">
+        <template #header>
+          <div class="operation-header">
+            <span>操作</span>
+            <el-popover placement="bottom-end" trigger="click" width="220">
+              <template #reference>
+                <el-button class="column-settings-button" size="small" text>
+                  <el-icon><Setting /></el-icon>
+                </el-button>
+              </template>
+              <div class="column-settings-panel">
+                <strong>显示表头</strong>
+                <el-checkbox-group v-model="visibleColumnKeys" @change="saveColumnSettings">
+                  <el-checkbox v-for="column in configurableColumns" :key="column.key" :label="column.key">
+                    {{ column.label }}
+                  </el-checkbox>
+                </el-checkbox-group>
+                <el-button size="small" plain @click="resetColumnSettings">恢复默认</el-button>
+              </div>
+            </el-popover>
+          </div>
+        </template>
         <template #default="{ row }">
           <el-button size="small" @click="openDetail(row.id)">详情</el-button>
           <el-button v-if="isAdmin" size="small" type="danger" plain @click="deleteOrder(row)">删除</el-button>
@@ -79,10 +99,12 @@
     </el-table>
     <div class="actions">
       <el-pagination
-        layout="prev, pager, next"
+        layout="sizes, prev, pager, next"
+        :page-sizes="pageSizeOptions"
         :total="total"
-        :page-size="20"
+        :page-size="pageSize"
         :current-page="page"
+        @size-change="handlePageSizeChange"
         @current-change="page = $event; load()"
       />
     </div>
@@ -94,7 +116,7 @@
         <div>
           <span class="status-pill">{{ statusLabel(currentOrder.status) }}</span>
           <h2>{{ currentOrder.order_no }}</h2>
-          <p>{{ currentOrder.platform_order_no || '暂无平台订单号' }}</p>
+          <p>{{ currentOrder.platform_order_no || '暂无平台订单号' }} · 提交时间：{{ formatDateTime(currentOrder.submitted_at) }}</p>
         </div>
         <el-button @click="detailVisible = false">关闭</el-button>
       </div>
@@ -305,15 +327,17 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { Setting, UploadFilled } from '@element-plus/icons-vue'
 import { api, list } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { dateRangeShortcuts } from '../utils/dateShortcuts'
+import { pageSizeOptions } from '../utils/pagination'
 
 const auth = useAuthStore()
 const rows = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
+const pageSize = ref(20)
 const dateRange = ref<string[]>([])
 const detailVisible = ref(false)
 const invoiceVisible = ref(false)
@@ -321,8 +345,24 @@ const afterSalesVisible = ref(false)
 const afterSalesFiles = ref<any[]>([])
 const currentOrder = ref<any>(null)
 const orderRelated = ref<any>(null)
-const summary = reactive({ order_count: 0, total_amount: '0.00' })
 const filters = reactive({ keyword: '', status: '' })
+const columnSettingsKey = 'jiezhi.orderList.visibleColumns'
+const configurableColumns = [
+  { key: 'order_no', label: '订单号' },
+  { key: 'platform_order_no', label: '平台订单号' },
+  { key: 'store', label: '店铺' },
+  { key: 'customer', label: '客户' },
+  { key: 'submitter', label: '提交人' },
+  { key: 'design_option', label: '设计处理方式' },
+  { key: 'status', label: '状态' },
+  { key: 'amount', label: '金额' },
+  { key: 'created_at', label: '订单生成时间' },
+  { key: 'design_finalized_at', label: '设计定稿时间' },
+  { key: 'production_arranged_at', label: '生产安排时间' },
+  { key: 'invoice_requested_at', label: '发票申请时间' }
+]
+const defaultColumnKeys = configurableColumns.map((column) => column.key)
+const visibleColumnKeys = ref<string[]>(loadColumnSettings())
 const invoiceForm = reactive({
   invoice_type: 'normal',
   amount: 0,
@@ -337,10 +377,41 @@ const afterSalesForm = reactive({
 })
 const isAdmin = computed(() => Boolean(auth.user?.is_superuser || auth.user?.groups?.some((group) => group.name === '管理员')))
 
+function loadColumnSettings() {
+  try {
+    const raw = window.localStorage.getItem(columnSettingsKey)
+    if (!raw) return [...defaultColumnKeys]
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return [...defaultColumnKeys]
+    const validKeys = new Set(defaultColumnKeys)
+    const filtered = parsed.filter((key) => validKeys.has(key))
+    return filtered.length ? filtered : [...defaultColumnKeys]
+  } catch {
+    return [...defaultColumnKeys]
+  }
+}
+
+function saveColumnSettings() {
+  window.localStorage.setItem(columnSettingsKey, JSON.stringify(visibleColumnKeys.value))
+}
+
+function resetColumnSettings() {
+  visibleColumnKeys.value = [...defaultColumnKeys]
+  saveColumnSettings()
+}
+
+function isColumnVisible(key: string) {
+  return visibleColumnKeys.value.includes(key)
+}
+
 function queryParams() {
+  const statusMap: Record<string, string> = {
+    design_pending: 'draft,submitted,pending_design,designing',
+    pending_production: 'design_confirmed,pending_production'
+  }
   return {
     keyword: filters.keyword,
-    status: filters.status,
+    status: statusMap[filters.status] || filters.status,
     created_from: dateRange.value?.[0] || '',
     created_to: dateRange.value?.[1] || ''
   }
@@ -348,13 +419,15 @@ function queryParams() {
 
 async function load() {
   const params = queryParams()
-  const [data, summaryResponse] = await Promise.all([
-    list<any>('/orders', { page: page.value, page_size: 20, ...params }),
-    api.get('/orders/summary/', { params })
-  ])
+  const data = await list<any>('/orders', { page: page.value, page_size: pageSize.value, ...params })
   rows.value = data.results
   total.value = data.count
-  Object.assign(summary, summaryResponse.data)
+}
+
+async function handlePageSizeChange(size: number) {
+  pageSize.value = size
+  page.value = 1
+  await load()
 }
 
 async function search() {
@@ -367,6 +440,12 @@ async function resetFilters() {
   filters.status = ''
   dateRange.value = []
   await search()
+}
+
+async function quickFilter(status: string) {
+  filters.status = status
+  page.value = 1
+  await load()
 }
 
 async function openDetail(id: string) {
@@ -510,14 +589,14 @@ function formatDateTime(value: string | null | undefined) {
 
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
-    draft: '草稿',
-    submitted: '已提交',
+    draft: '待设计',
+    submitted: '待设计',
     pending_design: '待设计',
-    designing: '设计中',
-    design_confirmed: '设计确认',
-    pending_production: '待生产安排',
+    designing: '待设计',
+    design_confirmed: '待生产',
+    pending_production: '待生产',
     completed: '已完成',
-    cancelled: '已取消'
+    cancelled: '已撤销'
   }
   return labels[status] || status
 }
@@ -537,8 +616,8 @@ function productionStatusLabel(status: string) {
   const labels: Record<string, string> = {
     pending: '待安排',
     scheduled: '已安排',
-    confirmed: '已确认',
-    exception: '异常'
+    confirmed: '已安排',
+    exception: '已驳回'
   }
   return labels[status] || status
 }

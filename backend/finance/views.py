@@ -37,7 +37,8 @@ class InvoiceRequestViewSet(viewsets.ModelViewSet):
                 | Q(remark__icontains=keyword)
             )
         if params.get("status"):
-            queryset = queryset.filter(status=params["status"])
+            statuses = [status for status in params["status"].split(",") if status]
+            queryset = queryset.filter(status__in=statuses)
         if params.get("created_from"):
             queryset = queryset.filter(created_at__date__gte=params["created_from"])
         if params.get("created_to"):

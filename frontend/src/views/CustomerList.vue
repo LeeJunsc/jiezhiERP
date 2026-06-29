@@ -34,10 +34,12 @@
     </el-table>
     <div class="actions">
       <el-pagination
-        layout="prev, pager, next"
+        layout="sizes, prev, pager, next"
+        :page-sizes="pageSizeOptions"
         :total="total"
-        :page-size="20"
+        :page-size="pageSize"
         :current-page="page"
+        @size-change="handlePageSizeChange"
         @current-change="page = $event; load()"
       />
     </div>
@@ -68,12 +70,14 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, create, list } from '../api/client'
 import { useAuthStore } from '../stores/auth'
+import { pageSizeOptions } from '../utils/pagination'
 
 const auth = useAuthStore()
 const rows = ref<any[]>([])
 const selectedRows = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
+const pageSize = ref(20)
 const dialogVisible = ref(false)
 const saving = ref(false)
 const editingId = ref('')
@@ -91,10 +95,16 @@ const customerForm = reactive({
 const isAdmin = computed(() => Boolean(auth.user?.is_superuser || auth.user?.groups?.some((group) => group.name === '管理员')))
 
 async function load() {
-  const data = await list<any>('/customers', { page: page.value, page_size: 20, keyword: filters.keyword })
+  const data = await list<any>('/customers', { page: page.value, page_size: pageSize.value, keyword: filters.keyword })
   rows.value = data.results
   total.value = data.count
   selectedRows.value = []
+}
+
+async function handlePageSizeChange(size: number) {
+  pageSize.value = size
+  page.value = 1
+  await load()
 }
 
 async function search() {

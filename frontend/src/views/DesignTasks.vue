@@ -5,7 +5,13 @@
         <h2>设计任务</h2>
         <small>待处理订单 {{ pendingCount }} 单</small>
       </div>
-      <el-button @click="load">刷新</el-button>
+      <div class="actions">
+        <el-button @click="load">刷新</el-button>
+        <el-button-group>
+          <el-button :type="viewMode === 'pending' ? 'primary' : 'default'" @click="switchViewMode('pending')">待处理</el-button>
+          <el-button :type="viewMode === 'recent' ? 'primary' : 'default'" @click="switchViewMode('recent')">最近完成</el-button>
+        </el-button-group>
+      </div>
     </div>
     <el-table :data="rows" border>
       <el-table-column prop="task_no" label="任务号" width="160" />
@@ -123,6 +129,7 @@ import { api, list } from '../api/client'
 
 const rows = ref<any[]>([])
 const pendingCount = ref(0)
+const viewMode = ref<'pending' | 'recent'>('pending')
 const detailVisible = ref(false)
 const currentTask = ref<any>(null)
 const currentOrder = ref<any>(null)
@@ -136,15 +143,21 @@ const uploading = computed(() => uploadingCount.value > 0)
 const canFinalize = computed(() => Boolean(currentTask.value && currentTask.value.status !== 'confirmed' && finalAttachments.value.length && !uploading.value))
 
 async function load() {
-  const [taskPage, pendingPage, designingPage, waitingPage, changesPage] = await Promise.all([
-    list<any>('/design-tasks'),
-    list<any>('/design-tasks', { status: 'pending', page_size: 1 }),
-    list<any>('/design-tasks', { status: 'designing', page_size: 1 }),
-    list<any>('/design-tasks', { status: 'waiting_confirmation', page_size: 1 }),
-    list<any>('/design-tasks', { status: 'needs_changes', page_size: 1 })
-  ])
-  rows.value = taskPage.results
-  pendingCount.value = pendingPage.count + designingPage.count + waitingPage.count + changesPage.count
+  const pendingStatuses = 'pending,designing,waiting_confirmation,needs_changes'
+  const pendingPage = await list<any>('/design-tasks', { status: pendingStatuses, page_size: viewMode.value === 'pending' ? 100 : 1 })
+  pendingCount.value = pendingPage.count
+  if (viewMode.value === 'pending') {
+    rows.value = pendingPage.results
+    return
+  }
+  const completedPage = await list<any>('/design-tasks', { status: 'confirmed', ordering: 'recent_completed', page_size: 30 })
+  rows.value = completedPage.results
+}
+
+async function switchViewMode(mode: 'pending' | 'recent') {
+  if (viewMode.value === mode) return
+  viewMode.value = mode
+  await load()
 }
 
 async function claim(id: string) {
@@ -236,14 +249,14 @@ function taskStatusLabel(status: string) {
 
 function orderStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    draft: '草稿',
-    submitted: '已提交',
+    draft: '待设计',
+    submitted: '待设计',
     pending_design: '待设计',
-    designing: '设计中',
-    design_confirmed: '设计确认',
-    pending_production: '待生产安排',
+    designing: '待设计',
+    design_confirmed: '待生产',
+    pending_production: '待生产',
     completed: '已完成',
-    cancelled: '已取消'
+    cancelled: '已撤销'
   }
   return labels[status] || status
 }

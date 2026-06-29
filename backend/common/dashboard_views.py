@@ -73,6 +73,9 @@ def dashboard_kanban(request):
         after_sales_order_count = (
             AfterSalesRequest.objects.filter(created_at__date=current).values("order_id").distinct().count()
         )
+        pending_design_order_count = day_orders.filter(status__in=[Order.Status.PENDING_DESIGN, Order.Status.DESIGNING]).count()
+        pending_production_order_count = day_orders.filter(status=Order.Status.PENDING_PRODUCTION).count()
+        pending_invoice_count = InvoiceRequest.objects.filter(created_at__date=current, status=InvoiceRequest.Status.PENDING).count()
         days.append(
             {
                 "date": current.isoformat(),
@@ -80,12 +83,20 @@ def dashboard_kanban(request):
                 "order_count": day_orders.count(),
                 "returning_customer_order_count": returning_count,
                 "after_sales_order_count": after_sales_order_count,
+                "pending_design_order_count": pending_design_order_count,
+                "pending_production_order_count": pending_production_order_count,
+                "pending_invoice_count": pending_invoice_count,
             }
         )
         current += timedelta(days=1)
 
     period_orders = Order.objects.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
     period_after_sales = AfterSalesRequest.objects.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+    period_pending_invoices = InvoiceRequest.objects.filter(
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date,
+        status=InvoiceRequest.Status.PENDING,
+    )
     returning_total = 0
     for order in period_orders.select_related("customer"):
         if Order.objects.filter(customer=order.customer, created_at__lt=order.created_at).exists():
@@ -100,6 +111,9 @@ def dashboard_kanban(request):
                 "order_count": period_orders.count(),
                 "returning_customer_order_count": returning_total,
                 "after_sales_order_count": period_after_sales.values("order_id").distinct().count(),
+                "pending_design_order_count": period_orders.filter(status__in=[Order.Status.PENDING_DESIGN, Order.Status.DESIGNING]).count(),
+                "pending_production_order_count": period_orders.filter(status=Order.Status.PENDING_PRODUCTION).count(),
+                "pending_invoice_count": period_pending_invoices.count(),
             },
             "series": days,
         }

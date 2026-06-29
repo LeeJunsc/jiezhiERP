@@ -6,6 +6,7 @@
         <img class="brand-logo" :src="logoWhite" alt="介知包装" />
         <small class="brand-time">{{ currentMinute }}</small>
       </div>
+      <RouterLink class="sidebar-primary-action" to="/orders/new">新建订单</RouterLink>
       <nav>
         <RouterLink v-for="item in navItems" :key="item.path" :to="item.path">{{ item.label }}</RouterLink>
       </nav>
@@ -42,9 +43,7 @@ let timer: number | undefined
 
 const navItems = [
   { path: '/', label: '工作台' },
-  { path: '/kanban', label: '看板' },
   { path: '/orders', label: '订单列表' },
-  { path: '/orders/new', label: '新建订单' },
   { path: '/design-tasks', label: '设计任务' },
   { path: '/production-arrangements', label: '生产安排' },
   { path: '/invoice-requests', label: '发票审批' },
@@ -52,9 +51,12 @@ const navItems = [
   { path: '/customers', label: '客户管理' },
   { path: '/system', label: '系统管理' }
 ]
+const routeTitles: Record<string, string> = {
+  '/orders/new': '新建订单'
+}
 
 const isLoginPage = computed(() => route.path === '/login')
-const currentTitle = computed(() => navItems.find((item) => item.path === route.path)?.label || '订单详情')
+const currentTitle = computed(() => routeTitles[route.path] || navItems.find((item) => item.path === route.path)?.label || '订单详情')
 const currentMinute = computed(() => {
   const date = new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',

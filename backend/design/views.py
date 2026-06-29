@@ -22,7 +22,10 @@ class DesignTaskViewSet(viewsets.ModelViewSet):
         queryset = DesignTask.objects.select_related("order", "order__store", "order__customer", "order__design_option", "designer").order_by("-created_at")
         status_value = self.request.query_params.get("status")
         if status_value:
-            queryset = queryset.filter(status=status_value)
+            statuses = [status for status in status_value.split(",") if status]
+            queryset = queryset.filter(status__in=statuses)
+        if self.request.query_params.get("ordering") == "recent_completed":
+            queryset = queryset.order_by("-confirmed_at", "-updated_at")
         return queryset
 
     @action(detail=True, methods=["post"])
