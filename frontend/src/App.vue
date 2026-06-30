@@ -6,7 +6,7 @@
         <img class="brand-logo" :src="logoWhite" alt="介知包装" />
         <small class="brand-time">{{ currentMinute }}</small>
       </div>
-      <RouterLink class="sidebar-primary-action" to="/orders/new">新建订单</RouterLink>
+      <RouterLink v-if="canCreateOrder" class="sidebar-primary-action" to="/orders/new">新建订单</RouterLink>
       <nav>
         <RouterLink v-for="item in navItems" :key="item.path" :to="item.path">{{ item.label }}</RouterLink>
       </nav>
@@ -41,22 +41,34 @@ const now = ref(new Date())
 const authReady = ref(false)
 let timer: number | undefined
 
-const navItems = [
+const allNavItems = [
   { path: '/', label: '工作台' },
-  { path: '/orders', label: '订单列表' },
-  { path: '/design-tasks', label: '设计任务' },
-  { path: '/production-arrangements', label: '生产安排' },
-  { path: '/invoice-requests', label: '发票审批' },
-  { path: '/after-sales-requests', label: '售后处理' },
-  { path: '/customers', label: '客户管理' },
-  { path: '/system', label: '系统管理' }
+  { path: '/orders', label: '订单列表', permissions: ['orders.view_order'] },
+  { path: '/design-tasks', label: '设计任务', permissions: ['design.view_designtask'] },
+  { path: '/production-arrangements', label: '生产安排', permissions: ['production.view_productionarrangement'] },
+  { path: '/invoice-requests', label: '发票审批', permissions: ['finance.view_invoicerequest'] },
+  { path: '/after-sales-requests', label: '售后处理', permissions: ['after_sales.view_aftersalesrequest'] },
+  { path: '/customers', label: '客户管理', permissions: ['customers.view_customer'] },
+  {
+    path: '/system',
+    label: '系统管理',
+    permissions: [
+      'stores.change_store',
+      'orders.change_designoption',
+      'system_settings.change_paymentchannel',
+      'auth.view_user',
+      'auth.view_group'
+    ]
+  }
 ]
 const routeTitles: Record<string, string> = {
   '/orders/new': '新建订单'
 }
 
 const isLoginPage = computed(() => route.path === '/login')
-const currentTitle = computed(() => routeTitles[route.path] || navItems.find((item) => item.path === route.path)?.label || '订单详情')
+const navItems = computed(() => allNavItems.filter((item) => !item.permissions || auth.hasAnyPermission(item.permissions)))
+const canCreateOrder = computed(() => auth.hasPermission('orders.add_order'))
+const currentTitle = computed(() => routeTitles[route.path] || allNavItems.find((item) => item.path === route.path)?.label || '订单详情')
 const currentMinute = computed(() => {
   const date = new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',

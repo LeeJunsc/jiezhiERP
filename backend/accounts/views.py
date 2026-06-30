@@ -44,6 +44,19 @@ class UserViewSet(viewsets.ModelViewSet):
     def roles(self, request):
         return Response(GroupSerializer(Group.objects.order_by("name"), many=True).data)
 
+    @action(detail=True, methods=["post"], url_path="reset-password")
+    def reset_password(self, request, pk=None):
+        user = self.get_object()
+        password = request.data.get("password", "")
+        if len(password) < 8:
+            return Response(
+                {"password": ["新密码至少需要 8 位。"]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user.set_password(password)
+        user.save(update_fields=["password"])
+        return Response({"message": "密码已重置"})
+
 
 class RoleViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.prefetch_related("permissions__content_type").order_by("name")

@@ -60,13 +60,9 @@
       <div class="panel-head"><h2>每日明细</h2></div>
       <el-table :data="paginatedSeries" border>
         <el-table-column prop="date" label="日期" width="120" />
-        <el-table-column prop="amount" label="订单金额" />
-        <el-table-column prop="order_count" label="订单数" />
-        <el-table-column prop="returning_customer_order_count" label="老客户订单数" />
-        <el-table-column prop="after_sales_order_count" label="产生售后订单数" />
-        <el-table-column prop="pending_design_order_count" label="待设计" />
-        <el-table-column prop="pending_production_order_count" label="待生产" />
-        <el-table-column prop="pending_invoice_count" label="待开票" />
+        <el-table-column v-for="metric in metrics" :key="metric.key" :prop="metric.key" :label="metric.label">
+          <template #default="{ row }">{{ tableMetricValue(row, metric.key) }}</template>
+        </el-table-column>
       </el-table>
       <div class="actions">
         <el-pagination
@@ -91,13 +87,13 @@ import { pageSizeOptions } from '../utils/pagination'
 
 interface KanbanRow {
   date: string
-  amount: string
-  order_count: number
-  returning_customer_order_count: number
-  after_sales_order_count: number
-  pending_design_order_count: number
-  pending_production_order_count: number
-  pending_invoice_count: number
+  amount?: string
+  order_count?: number
+  returning_customer_order_count?: number
+  after_sales_order_count?: number
+  pending_design_order_count?: number
+  pending_production_order_count?: number
+  pending_invoice_count?: number
 }
 
 const today = new Date()
@@ -192,7 +188,12 @@ const metricConfigs: Record<MetricKey, {
     format: (value) => `${Number(value || 0).toFixed(0)}单`
   }
 }
-const metrics = Object.values(metricConfigs)
+const visibleMetricKeys = computed<MetricKey[]>(() => {
+  const keys = data.value?.visible_metrics
+  if (!Array.isArray(keys)) return Object.keys(metricConfigs) as MetricKey[]
+  return keys.filter((key: string): key is MetricKey => key in metricConfigs)
+})
+const metrics = computed(() => visibleMetricKeys.value.map((key) => metricConfigs[key]))
 const activeMetricConfig = computed(() => metricConfigs[activeMetric.value])
 const maxMetricValue = computed(() => Math.max(...series.value.map((item) => activeMetricConfig.value.value(item)), 1))
 
@@ -215,6 +216,11 @@ function handleDailyPageSizeChange(size: number) {
   dailyPage.value = 1
 }
 
+function tableMetricValue(row: KanbanRow, key: MetricKey) {
+  if (key === 'amount') return `¥${Number(row.amount || 0).toFixed(2)}`
+  return Number(row[key] || 0)
+}
+
 async function load() {
   const response = await api.get('/dashboard/kanban', {
     params: {
@@ -223,8 +229,20 @@ async function load() {
     }
   })
   data.value = response.data
-  Object.assign(summary, response.data.summary)
+  Object.assign(summary, {
+    amount: '0.00',
+    order_count: 0,
+    returning_customer_order_count: 0,
+    after_sales_order_count: 0,
+    pending_design_order_count: 0,
+    pending_production_order_count: 0,
+    pending_invoice_count: 0,
+    ...response.data.summary
+  })
   series.value = response.data.series
+  if (!visibleMetricKeys.value.includes(activeMetric.value)) {
+    activeMetric.value = visibleMetricKeys.value[0] || 'order_count'
+  }
   dailyPage.value = 1
 }
 

@@ -175,9 +175,10 @@
               <el-table-column label="状态" width="90">
                 <template #default="{ row }">{{ row.is_active ? '启用' : '停用' }}</template>
               </el-table-column>
-              <el-table-column label="操作" width="180">
+              <el-table-column label="操作" width="260">
                 <template #default="{ row }">
                   <el-button size="small" type="primary" @click="saveUserRoles(row)">保存</el-button>
+                  <el-button size="small" plain @click="openResetPassword(row)">重置密码</el-button>
                   <el-button
                     size="small"
                     :type="row.is_active ? 'warning' : 'success'"
@@ -224,6 +225,24 @@
       <el-button type="primary" @click="createUser">创建用户</el-button>
     </template>
   </el-dialog>
+
+  <el-dialog v-model="resetPasswordVisible" title="重置密码" width="min(460px, 94vw)">
+    <el-form label-position="top" :model="passwordForm">
+      <el-form-item label="账号">
+        <el-input :model-value="currentPasswordUser?.username || ''" disabled />
+      </el-form-item>
+      <el-form-item label="新密码">
+        <el-input v-model="passwordForm.password" type="password" show-password placeholder="至少 8 位" />
+      </el-form-item>
+      <el-form-item label="确认新密码">
+        <el-input v-model="passwordForm.confirmPassword" type="password" show-password placeholder="再次输入新密码" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="resetPasswordVisible = false">取消</el-button>
+      <el-button type="primary" :loading="resettingPassword" @click="submitResetPassword">确认重置</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -242,6 +261,9 @@ const users = ref<any[]>([])
 const roles = ref<any[]>([])
 const permissions = ref<any[]>([])
 const userDialogVisible = ref(false)
+const resetPasswordVisible = ref(false)
+const resettingPassword = ref(false)
+const currentPasswordUser = ref<any | null>(null)
 const activeRoleId = ref<number | null>(null)
 
 const storeForm = reactive({ name: '', platform: 'taobao', custom_platform: '', status: 'enabled' })
@@ -255,6 +277,10 @@ const userForm = reactive({
   password: '',
   group_ids: [] as number[],
   is_active: true
+})
+const passwordForm = reactive({
+  password: '',
+  confirmPassword: ''
 })
 const permissionGroups = computed(() => {
   const grouped: Record<string, any[]> = {}
@@ -437,6 +463,28 @@ async function toggleUserStatus(row: any) {
   await api.patch(`/users/${row.id}/`, { is_active: !row.is_active })
   ElMessage.success(`账号已${row.is_active ? '停用' : '启用'}`)
   await loadAll()
+}
+
+function openResetPassword(row: any) {
+  currentPasswordUser.value = row
+  passwordForm.password = ''
+  passwordForm.confirmPassword = ''
+  resetPasswordVisible.value = true
+}
+
+async function submitResetPassword() {
+  if (!currentPasswordUser.value) return
+  if (!passwordForm.password || passwordForm.password.length < 8) return ElMessage.warning('新密码至少 8 位')
+  if (passwordForm.password !== passwordForm.confirmPassword) return ElMessage.warning('两次输入的密码不一致')
+
+  resettingPassword.value = true
+  try {
+    await api.post(`/users/${currentPasswordUser.value.id}/reset-password/`, { password: passwordForm.password })
+    ElMessage.success('密码已重置')
+    resetPasswordVisible.value = false
+  } finally {
+    resettingPassword.value = false
+  }
 }
 
 function userPermissionLabels(user: any) {

@@ -112,9 +112,18 @@
           <el-button type="primary" :loading="finalizing" :disabled="!canFinalize" @click="finalizeDesign">定稿</el-button>
         </div>
         <div v-if="finalAttachments.length" class="attachment-list">
-          <a v-for="file in finalAttachments" :key="file.id" :href="file.file_url" target="_blank" rel="noreferrer">
-            {{ file.file_name }}
-          </a>
+          <div v-for="file in finalAttachments" :key="file.id" class="attachment-row">
+            <a :href="file.file_url" target="_blank" rel="noreferrer">{{ file.file_name }}</a>
+            <el-button
+              class="attachment-delete"
+              :icon="Close"
+              circle
+              text
+              type="danger"
+              :disabled="deletingAttachmentId === file.id || finalizing"
+              @click="deleteFinalAttachment(file)"
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -123,8 +132,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Close, UploadFilled } from '@element-plus/icons-vue'
 import { api, list } from '../api/client'
 
 const rows = ref<any[]>([])
@@ -138,6 +147,7 @@ const finalAttachments = ref<any[]>([])
 const finalRemark = ref('')
 const uploadingCount = ref(0)
 const finalizing = ref(false)
+const deletingAttachmentId = ref<string | null>(null)
 const uploadedFileUids = new Set<string>()
 const uploading = computed(() => uploadingCount.value > 0)
 const canFinalize = computed(() => Boolean(currentTask.value && currentTask.value.status !== 'confirmed' && finalAttachments.value.length && !uploading.value))
@@ -204,6 +214,28 @@ async function handleFinalFileChange(file: any) {
     ElMessage.error('定稿文件上传失败')
   } finally {
     uploadingCount.value -= 1
+  }
+}
+
+async function deleteFinalAttachment(file: any) {
+  if (!currentTask.value) return
+  try {
+    await ElMessageBox.confirm(`确认删除文件「${file.file_name}」？`, '删除附件', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  deletingAttachmentId.value = file.id
+  try {
+    await api.delete(`/attachments/${file.id}/`)
+    finalAttachments.value = finalAttachments.value.filter((item) => item.id !== file.id)
+    ElMessage.success('附件已删除')
+  } finally {
+    deletingAttachmentId.value = null
   }
 }
 

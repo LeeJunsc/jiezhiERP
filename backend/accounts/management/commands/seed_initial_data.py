@@ -173,13 +173,17 @@ class Command(BaseCommand):
             ("design01", "王设计", "设计"),
             ("prod01", "赵生产", "生产"),
             ("finance01", "钱财务", "财务"),
+            ("aftersales01", "孙售后", "售后"),
+            ("admin01", "测试管理员", "管理员"),
         ]
         users = {"admin": admin}
         for username, first_name, role in users_data:
             user, _ = User.objects.get_or_create(username=username, defaults={"first_name": first_name, "is_active": True})
             user.first_name = first_name
+            user.is_active = True
             user.set_password("demo123456")
             user.save()
+            user.groups.clear()
             user.groups.add(groups[role])
             users[username] = user
 
@@ -546,4 +550,9 @@ class Command(BaseCommand):
                     uploader=admin,
                 )
 
-        self.stdout.write(self.style.SUCCESS(f"初始化完成：admin / admin123456，已准备 {len(orders_data)} 条演示订单"))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"初始化完成：admin / admin123456，测试账号 sales01/design01/prod01/finance01/aftersales01/admin01 / demo123456，"
+                f"已准备 {len(orders_data)} 条演示订单"
+            )
+        )
