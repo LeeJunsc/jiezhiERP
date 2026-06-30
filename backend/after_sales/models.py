@@ -13,10 +13,10 @@ class AfterSalesRequest(TimeStampedModel):
         OTHER = "other", "其他"
 
     class Status(models.TextChoices):
-        PENDING = "pending", "待受理"
+        PENDING = "pending", "待处理"
         PROCESSING = "processing", "处理中"
         COMPLETED = "completed", "已完成"
-        CLOSED = "closed", "已关闭"
+        CLOSED = "closed", "已驳回"
 
     request_no = models.CharField(max_length=40, unique=True)
     order = models.ForeignKey("orders.Order", on_delete=models.PROTECT, related_name="after_sales_requests")
@@ -24,6 +24,7 @@ class AfterSalesRequest(TimeStampedModel):
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING)
     description = models.TextField()
     solution = models.TextField(blank=True)
+    remark = models.TextField(blank=True)
     refund_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="after_sales_cases")
 

@@ -21,6 +21,8 @@ PERMISSION_CATALOG = [
     {"code": "orders.change_designoption", "label": "维护设计流程", "group": "系统管理"},
     {"code": "system_settings.view_paymentchannel", "label": "查看收款渠道", "group": "系统管理"},
     {"code": "system_settings.change_paymentchannel", "label": "维护收款渠道", "group": "系统管理"},
+    {"code": "system_settings.view_invoicetypeoption", "label": "查看发票类型", "group": "系统管理"},
+    {"code": "system_settings.change_invoicetypeoption", "label": "维护发票类型", "group": "系统管理"},
     {"code": "attachments.view_attachment", "label": "查看附件", "group": "附件"},
     {"code": "attachments.add_attachment", "label": "上传附件", "group": "附件"},
     {"code": "attachments.delete_attachment", "label": "删除附件", "group": "附件"},

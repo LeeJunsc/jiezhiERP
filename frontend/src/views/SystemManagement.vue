@@ -95,6 +95,74 @@
         </el-table>
       </el-tab-pane>
 
+      <el-tab-pane label="发票类型" name="invoice-types">
+        <el-form inline :model="invoiceTypeForm">
+          <el-form-item label="名称"><el-input v-model="invoiceTypeForm.name" placeholder="普通13%" /></el-form-item>
+          <el-form-item label="编码"><el-input v-model="invoiceTypeForm.code" placeholder="normal" /></el-form-item>
+          <el-form-item label="税率"><el-input-number v-model="invoiceTypeForm.tax_rate" :min="0" :precision="2" /></el-form-item>
+          <el-form-item label="排序"><el-input-number v-model="invoiceTypeForm.sort_order" :min="0" /></el-form-item>
+          <el-form-item label="状态">
+            <el-select v-model="invoiceTypeForm.status" style="width: 120px">
+              <el-option label="启用" value="enabled" />
+              <el-option label="停用" value="disabled" />
+            </el-select>
+          </el-form-item>
+          <el-form-item><el-button type="primary" @click="createInvoiceType">新增发票类型</el-button></el-form-item>
+        </el-form>
+        <el-table :data="invoiceTypes" border>
+          <el-table-column prop="name" label="名称" />
+          <el-table-column prop="code" label="编码" />
+          <el-table-column label="税率" width="100">
+            <template #default="{ row }">{{ Number(row.tax_rate || 0).toFixed(2) }}%</template>
+          </el-table-column>
+          <el-table-column prop="sort_order" label="排序" width="100" />
+          <el-table-column label="状态" width="120">
+            <template #default="{ row }">{{ statusLabel(row.status) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="150">
+            <template #default="{ row }">
+              <el-button size="small" :type="row.status === 'enabled' ? 'warning' : 'success'" plain @click="toggleInvoiceType(row)">
+                {{ row.status === 'enabled' ? '停用' : '启用' }}
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <el-tab-pane label="订单导入" name="order-import">
+        <div class="import-panel">
+          <el-upload
+            class="import-upload"
+            v-model:file-list="orderImportFiles"
+            action="#"
+            accept=".xlsx"
+            :auto-upload="false"
+            :limit="1"
+          >
+            <el-button type="primary">选择 Excel</el-button>
+          </el-upload>
+          <el-button :loading="importingOrders" :disabled="!orderImportFiles.length" @click="importOrders(true)">
+            测试导入
+          </el-button>
+          <el-button type="success" :loading="importingOrders" :disabled="!orderImportFiles.length" @click="importOrders(false)">
+            导入订单
+          </el-button>
+        </div>
+        <div v-if="orderImportResult" class="summary-strip">
+          <div><span>总行数</span><strong>{{ orderImportResult.total }}</strong></div>
+          <div><span>已创建</span><strong>{{ orderImportResult.created }}</strong></div>
+          <div><span>已跳过</span><strong>{{ orderImportResult.skipped }}</strong></div>
+          <div><span>失败</span><strong>{{ orderImportResult.failed }}</strong></div>
+        </div>
+        <el-table v-if="orderImportResult?.details?.length" :data="orderImportResult.details" border>
+          <el-table-column prop="row" label="行号" width="90" />
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">{{ importStatusLabel(row.status) }}</template>
+          </el-table-column>
+          <el-table-column prop="message" label="结果" min-width="240" />
+        </el-table>
+      </el-tab-pane>
+
       <el-tab-pane label="用户管理" name="users">
         <el-tabs v-model="userManageTab">
           <el-tab-pane label="角色" name="roles">
@@ -257,6 +325,7 @@ const userManageTab = ref('roles')
 const stores = ref<any[]>([])
 const designOptions = ref<any[]>([])
 const paymentChannels = ref<any[]>([])
+const invoiceTypes = ref<any[]>([])
 const users = ref<any[]>([])
 const roles = ref<any[]>([])
 const permissions = ref<any[]>([])
@@ -264,11 +333,15 @@ const userDialogVisible = ref(false)
 const resetPasswordVisible = ref(false)
 const resettingPassword = ref(false)
 const currentPasswordUser = ref<any | null>(null)
+const orderImportFiles = ref<any[]>([])
+const importingOrders = ref(false)
+const orderImportResult = ref<any | null>(null)
 const activeRoleId = ref<number | null>(null)
 
 const storeForm = reactive({ name: '', platform: 'taobao', custom_platform: '', status: 'enabled' })
 const designForm = reactive({ name: '', requires_design: true, sort_order: 50, status: 'enabled', description: '' })
 const channelForm = reactive({ name: '', code: '', is_default: false, sort_order: 70, status: 'enabled', description: '' })
+const invoiceTypeForm = reactive({ name: '', code: '', tax_rate: 13, sort_order: 30, status: 'enabled', description: '' })
 const roleForm = reactive({ name: '' })
 const userForm = reactive({
   username: '',
@@ -305,10 +378,11 @@ function storePlatformLabel(store: any) {
 }
 
 async function loadAll() {
-  const [storePage, designPage, channelPage, userPage, rolePage, permissionsResponse] = await Promise.all([
+  const [storePage, designPage, channelPage, invoiceTypePage, userPage, rolePage, permissionsResponse] = await Promise.all([
     list<any>('/stores'),
     list<any>('/design-options'),
     list<any>('/payment-channels'),
+    list<any>('/invoice-type-options'),
     list<any>('/users'),
     list<any>('/roles'),
     api.get('/roles/permissions/')
@@ -318,6 +392,7 @@ async function loadAll() {
   stores.value = storePage.results
   designOptions.value = designPage.results
   paymentChannels.value = channelPage.results
+  invoiceTypes.value = invoiceTypePage.results
   roles.value = rolePage.results.map((role) => ({
     ...role,
     _permissionIds: (role.permission_codes || []).map((code: string) => permissionIdByCode[code]).filter(Boolean)
@@ -357,6 +432,14 @@ async function createChannel() {
   await loadAll()
 }
 
+async function createInvoiceType() {
+  if (!invoiceTypeForm.name || !invoiceTypeForm.code) return ElMessage.warning('请填写发票类型名称和编码')
+  await create('/invoice-type-options/', invoiceTypeForm)
+  Object.assign(invoiceTypeForm, { name: '', code: '', tax_rate: 13, sort_order: invoiceTypeForm.sort_order + 10, status: 'enabled', description: '' })
+  ElMessage.success('发票类型已创建')
+  await loadAll()
+}
+
 async function toggleStore(row: any) {
   await api.patch(`/stores/${row.id}/`, { status: row.status === 'enabled' ? 'disabled' : 'enabled' })
   ElMessage.success(`店铺已${row.status === 'enabled' ? '停用' : '启用'}`)
@@ -373,6 +456,41 @@ async function togglePaymentChannel(row: any) {
   await api.patch(`/payment-channels/${row.id}/`, { status: row.status === 'enabled' ? 'disabled' : 'enabled' })
   ElMessage.success(`收款渠道已${row.status === 'enabled' ? '停用' : '启用'}`)
   await loadAll()
+}
+
+async function toggleInvoiceType(row: any) {
+  await api.patch(`/invoice-type-options/${row.id}/`, { status: row.status === 'enabled' ? 'disabled' : 'enabled' })
+  ElMessage.success(`发票类型已${row.status === 'enabled' ? '停用' : '启用'}`)
+  await loadAll()
+}
+
+async function importOrders(dryRun: boolean) {
+  const file = orderImportFiles.value[0]?.raw
+  if (!file) return ElMessage.warning('请选择 Excel 文件')
+
+  importingOrders.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('dry_run', dryRun ? 'true' : 'false')
+    const response = await api.post('/orders/import-spreadsheet/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    orderImportResult.value = response.data
+    if (!dryRun) orderImportFiles.value = []
+    ElMessage.success(`${dryRun ? '测试完成' : '导入完成'}，可创建 ${response.data.created} 单`)
+  } finally {
+    importingOrders.value = false
+  }
+}
+
+function importStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    created: '已创建',
+    skipped: '已跳过',
+    failed: '失败'
+  }
+  return labels[status] || status
 }
 
 async function createRole() {

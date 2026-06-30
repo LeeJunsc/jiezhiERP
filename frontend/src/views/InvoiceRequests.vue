@@ -105,8 +105,20 @@
       </div>
 
       <div class="detail-section">
-        <h3>备注说明</h3>
+        <h3>申请备注</h3>
         <p class="pre-line">{{ current.remark || '暂无备注' }}</p>
+      </div>
+
+      <div class="detail-section">
+        <h3>审批备注</h3>
+        <el-input
+          v-if="canApprove && current.status === 'pending'"
+          v-model="approvalRemark"
+          type="textarea"
+          :rows="4"
+          placeholder="填写通过、驳回或开票处理说明"
+        />
+        <p v-else class="pre-line">{{ current.approval_remark || '暂无审批备注' }}</p>
       </div>
 
       <div class="detail-section">
@@ -159,6 +171,8 @@ const detailVisible = ref(false)
 const current = ref<any>(null)
 const invoiceFiles = ref<any[]>([])
 const invoiceAttachments = ref<any[]>([])
+const invoiceTypes = ref<any[]>([])
+const approvalRemark = ref('')
 const uploadingFileUids = new Set<string>()
 const filters = reactive({ keyword: '', status: 'pending' })
 const summary = reactive({ request_count: 0, total_amount: '0.00' })
@@ -186,6 +200,16 @@ async function load() {
   pendingCount.value = pendingPage.count
 }
 
+async function loadInvoiceTypes() {
+  invoiceTypes.value = (await list<any>('/invoice-type-options', { status: 'enabled', page_size: 100 })).results
+  if (!invoiceTypes.value.length) {
+    invoiceTypes.value = [
+      { code: 'normal', name: '普通13%' },
+      { code: 'special', name: '专票13%' }
+    ]
+  }
+}
+
 async function handlePageSizeChange(size: number) {
   pageSize.value = size
   page.value = 1
@@ -207,6 +231,7 @@ async function resetFilters() {
 async function openDetail(row: any) {
   current.value = row
   invoiceFiles.value = []
+  approvalRemark.value = row.approval_remark || ''
   uploadingFileUids.clear()
   await loadInvoiceAttachments(row.id)
   detailVisible.value = true
@@ -247,7 +272,7 @@ async function approve(row: any) {
   } catch {
     return
   }
-  await api.post(`/invoice-requests/${row.id}/approve/`)
+  await api.post(`/invoice-requests/${row.id}/approve/`, { approval_remark: approvalRemark.value.trim() })
   ElMessage.success('发票申请已通过')
   detailVisible.value = false
   await load()
@@ -264,7 +289,7 @@ async function reject(row: any) {
   } catch {
     return
   }
-  await api.post(`/invoice-requests/${row.id}/reject/`)
+  await api.post(`/invoice-requests/${row.id}/reject/`, { approval_remark: approvalRemark.value.trim() })
   ElMessage.success('发票申请已驳回')
   detailVisible.value = false
   await load()
@@ -275,8 +300,7 @@ function money(value: string | number | null | undefined) {
 }
 
 function invoiceTypeLabel(type: string) {
-  const labels: Record<string, string> = { normal: '普票', special: '专票' }
-  return labels[type] || type
+  return invoiceTypes.value.find((item) => item.code === type)?.name || ({ normal: '普通13%', special: '专票13%' } as Record<string, string>)[type] || type
 }
 
 function statusLabel(status: string) {
@@ -292,6 +316,6 @@ function statusLabel(status: string) {
 
 onMounted(async () => {
   await auth.loadMe()
-  await load()
+  await Promise.all([load(), loadInvoiceTypes()])
 })
 </script>

@@ -32,6 +32,7 @@ class AfterSalesRequestSerializer(serializers.ModelSerializer):
             "status",
             "description",
             "solution",
+            "remark",
             "refund_amount",
             "owner",
             "owner_name",

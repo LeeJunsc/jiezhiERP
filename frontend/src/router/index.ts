@@ -19,6 +19,7 @@ const systemPermissions = [
   'stores.change_store',
   'orders.change_designoption',
   'system_settings.change_paymentchannel',
+  'system_settings.change_invoicetypeoption',
   'auth.view_user',
   'auth.view_group'
 ]

@@ -225,7 +225,8 @@
                   <el-descriptions-item label="申请时间">{{ formatDateTime(invoice.created_at) }}</el-descriptions-item>
                   <el-descriptions-item label="金额">{{ money(invoice.amount) }}</el-descriptions-item>
                   <el-descriptions-item label="抬头">{{ invoice.title }}</el-descriptions-item>
-                  <el-descriptions-item label="备注">{{ invoice.remark || '暂无' }}</el-descriptions-item>
+                  <el-descriptions-item label="申请备注">{{ invoice.remark || '暂无' }}</el-descriptions-item>
+                  <el-descriptions-item label="审批备注">{{ invoice.approval_remark || '暂无' }}</el-descriptions-item>
                 </el-descriptions>
                 <AttachmentList :files="invoice.attachments || []" />
               </section>
@@ -246,7 +247,7 @@
                   <el-descriptions-item label="类型">{{ afterSalesTypeLabel(afterSales.type) }}</el-descriptions-item>
                   <el-descriptions-item label="申请时间">{{ formatDateTime(afterSales.created_at) }}</el-descriptions-item>
                   <el-descriptions-item label="问题说明">{{ afterSales.description }}</el-descriptions-item>
-                  <el-descriptions-item label="处理说明">{{ afterSales.solution || '暂无' }}</el-descriptions-item>
+                  <el-descriptions-item label="处理备注">{{ afterSales.remark || '暂无' }}</el-descriptions-item>
                 </el-descriptions>
                 <AttachmentList :files="afterSales.attachments || []" />
               </section>
@@ -270,8 +271,7 @@
     <el-form label-position="top" :model="invoiceForm">
       <el-form-item label="发票类型">
         <el-select v-model="invoiceForm.invoice_type" style="width: 100%">
-          <el-option label="普票" value="normal" />
-          <el-option label="专票" value="special" />
+          <el-option v-for="type in invoiceTypes" :key="type.code" :label="type.name" :value="type.code" />
         </el-select>
       </el-form-item>
       <el-form-item label="发票金额">
@@ -281,7 +281,7 @@
         <el-input v-model="invoiceForm.title" placeholder="填写发票抬头" />
       </el-form-item>
       <el-form-item label="税号">
-        <el-input v-model="invoiceForm.tax_number" placeholder="专票或需要税号时填写" />
+        <el-input v-model="invoiceForm.tax_number" placeholder="专票13%或需要税号时填写" />
       </el-form-item>
       <el-form-item label="备注说明">
         <el-input v-model="invoiceForm.remark" type="textarea" :rows="3" placeholder="填写开票要求、邮寄说明或其他备注" />
@@ -345,6 +345,7 @@ const afterSalesVisible = ref(false)
 const afterSalesFiles = ref<any[]>([])
 const currentOrder = ref<any>(null)
 const orderRelated = ref<any>(null)
+const invoiceTypes = ref<any[]>([])
 const filters = reactive({ keyword: '', status: '' })
 const columnSettingsKey = 'jiezhi.orderList.visibleColumns'
 const configurableColumns = [
@@ -461,12 +462,22 @@ async function openDetail(id: string) {
 
 function openInvoiceDialog() {
   if (!currentOrder.value) return
-  invoiceForm.invoice_type = 'normal'
+  invoiceForm.invoice_type = invoiceTypes.value[0]?.code || 'normal'
   invoiceForm.amount = Number(currentOrder.value.total_amount || 0)
   invoiceForm.title = currentOrder.value.customer_info?.invoice_title || currentOrder.value.customer_info?.company || currentOrder.value.customer_info?.name || ''
   invoiceForm.tax_number = currentOrder.value.customer_info?.tax_number || ''
   invoiceForm.remark = ''
   invoiceVisible.value = true
+}
+
+async function loadInvoiceTypes() {
+  invoiceTypes.value = (await list<any>('/invoice-type-options', { status: 'enabled', page_size: 100 })).results
+  if (!invoiceTypes.value.length) {
+    invoiceTypes.value = [
+      { code: 'normal', name: '普通13%' },
+      { code: 'special', name: '专票13%' }
+    ]
+  }
 }
 
 async function submitInvoiceRequest() {
@@ -635,10 +646,10 @@ function invoiceStatusLabel(status: string) {
 
 function afterSalesStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    pending: '待受理',
+    pending: '待处理',
     processing: '处理中',
     completed: '已完成',
-    closed: '已关闭'
+    closed: '已驳回'
   }
   return labels[status] || status
 }
@@ -665,6 +676,6 @@ function paymentStatusLabel(status: string) {
 
 onMounted(async () => {
   await auth.loadMe()
-  await load()
+  await Promise.all([load(), loadInvoiceTypes()])
 })
 </script>

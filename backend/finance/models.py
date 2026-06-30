@@ -6,8 +6,8 @@ from common.models import TimeStampedModel
 
 class InvoiceRequest(TimeStampedModel):
     class InvoiceType(models.TextChoices):
-        NORMAL = "normal", "普票"
-        SPECIAL = "special", "专票"
+        NORMAL = "normal", "普通13%"
+        SPECIAL = "special", "专票13%"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "草稿"
@@ -24,6 +24,7 @@ class InvoiceRequest(TimeStampedModel):
     title = models.CharField(max_length=200)
     tax_number = models.CharField(max_length=80, blank=True)
     remark = models.TextField(blank=True)
+    approval_remark = models.TextField(blank=True)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING)
     applicant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="invoice_applications")
     approver = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoice_approvals")

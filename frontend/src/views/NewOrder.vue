@@ -14,7 +14,7 @@
             <h3>客户</h3>
             <el-button type="primary" @click="customerDialogVisible = true">新建客户</el-button>
           </div>
-          <el-form-item label="选择客户">
+          <el-form-item label="选择客户" required>
             <el-select
               v-model="form.customer"
               filterable
@@ -38,7 +38,7 @@
         <section class="form-block">
           <h3>订单号</h3>
           <div class="form-grid">
-            <el-form-item label="平台订单号"><el-input v-model="form.platform_order_no" placeholder="请输入平台订单号" /></el-form-item>
+            <el-form-item label="平台订单号" required><el-input v-model="form.platform_order_no" placeholder="请输入平台订单号" /></el-form-item>
             <el-form-item label="系统单据号"><el-input :model-value="systemOrderNo" disabled /></el-form-item>
           </div>
         </section>
@@ -46,7 +46,7 @@
         <section class="form-block">
           <h3>来源</h3>
           <div class="form-grid">
-            <el-form-item label="来源店铺">
+            <el-form-item label="来源店铺" required>
               <el-select v-model="form.store">
                 <el-option v-for="store in stores" :key="store.id" :label="storeLabel(store)" :value="store.id" />
               </el-select>
@@ -78,7 +78,7 @@
             </el-table-column>
             <el-table-column label="" width="80">
               <template #default="{ row }">
-                <el-button text type="danger" :disabled="items.length === 1" @click="removeProduct(row.local_id)">删除</el-button>
+                <el-button text type="danger" @click="removeProduct(row.local_id)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -87,7 +87,7 @@
         <section class="form-block">
           <h3>订单金额</h3>
           <div class="form-grid">
-            <el-form-item label="订单金额"><el-input-number v-model="form.total_amount" :min="0" :precision="2" /></el-form-item>
+            <el-form-item label="订单金额" required><el-input-number v-model="form.total_amount" :min="0" :precision="2" /></el-form-item>
             <el-form-item label="已收金额"><el-input-number v-model="form.paid_amount" :min="0" :precision="2" /></el-form-item>
             <el-form-item label="付款状态">
               <el-select v-model="form.payment_status">
@@ -107,7 +107,7 @@
         <section class="form-block">
           <h3>设计</h3>
           <div class="form-grid">
-            <el-form-item label="设计处理方式">
+            <el-form-item label="设计处理方式" required>
               <el-select v-model="form.design_option">
                 <el-option v-for="option in designOptions" :key="option.id" :label="option.name" :value="option.id" />
               </el-select>
@@ -188,10 +188,8 @@ const customerLoading = ref(false)
 const customerDialogVisible = ref(false)
 const draftFiles = ref<any[]>([])
 const submitting = ref(false)
-const items = ref([
-  { local_id: 1, product_name: '定制亚克力展示架', sku: '', quantity: 1, unit_price: 0 }
-])
-let nextItemId = 2
+const items = ref<any[]>([])
+let nextItemId = 1
 const form = reactive<any>({
   order_no: '',
   platform_order_no: '',
@@ -232,7 +230,6 @@ onMounted(async () => {
   designOptions.value = (await list<any>('/design-options', { status: 'enabled' })).results
   paymentChannels.value = (await list<any>('/payment-channels', { status: 'enabled' })).results
   form.store = stores.value[0]?.id
-  form.customer = customers.value[0]?.id
   form.design_option = designOptions.value[0]?.id
   form.payment_channel = paymentChannels.value.find((channel) => channel.is_default)?.id || paymentChannels.value[0]?.id
   restoreLocalDraft()
@@ -297,7 +294,6 @@ function addProduct() {
 }
 
 async function removeProduct(localId: number) {
-  if (items.value.length === 1) return
   try {
     await ElMessageBox.confirm('确认删除该产品 / SKU？', '删除产品', {
       confirmButtonText: '删除',
@@ -360,12 +356,20 @@ function buildOrderPayload() {
     ElMessage.warning('请选择客户')
     return null
   }
+  if (!form.platform_order_no.trim()) {
+    ElMessage.warning('请填写平台订单号')
+    return null
+  }
   if (!form.store) {
     ElMessage.warning('请选择来源店铺')
     return null
   }
   if (!form.design_option) {
     ElMessage.warning('请选择设计处理方式')
+    return null
+  }
+  if (!Number(form.total_amount)) {
+    ElMessage.warning('请填写订单金额')
     return null
   }
   if (!orderItems.length) {

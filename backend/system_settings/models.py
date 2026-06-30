@@ -24,3 +24,25 @@ class PaymentChannel(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+
+class InvoiceTypeOption(TimeStampedModel):
+    class Status(models.TextChoices):
+        ENABLED = "enabled", "启用"
+        DISABLED = "disabled", "停用"
+
+    name = models.CharField(max_length=80)
+    code = models.SlugField(max_length=60, unique=True)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=13)
+    sort_order = models.IntegerField(default=0)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ENABLED)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        indexes = [
+            models.Index(fields=["status", "sort_order"]),
+        ]
+
+    def __str__(self):
+        return self.name

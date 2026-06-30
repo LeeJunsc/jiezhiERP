@@ -50,7 +50,8 @@ class InvoiceRequestViewSet(viewsets.ModelViewSet):
         invoice = self.get_object()
         invoice.status = InvoiceRequest.Status.APPROVED
         invoice.approver = request.user
-        invoice.save(update_fields=["status", "approver", "updated_at"])
+        invoice.approval_remark = request.data.get("approval_remark", invoice.approval_remark)
+        invoice.save(update_fields=["status", "approver", "approval_remark", "updated_at"])
         return Response(self.get_serializer(invoice).data)
 
     @action(detail=True, methods=["post"])
@@ -58,7 +59,8 @@ class InvoiceRequestViewSet(viewsets.ModelViewSet):
         invoice = self.get_object()
         invoice.status = InvoiceRequest.Status.REJECTED
         invoice.approver = request.user
-        invoice.save(update_fields=["status", "approver", "updated_at"])
+        invoice.approval_remark = request.data.get("approval_remark", invoice.approval_remark)
+        invoice.save(update_fields=["status", "approver", "approval_remark", "updated_at"])
         return Response(self.get_serializer(invoice).data)
 
     @action(detail=False, methods=["get"])

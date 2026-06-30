@@ -14,7 +14,7 @@ class AfterSalesRequestViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_permissions(self):
-        if self.action in ["start", "complete", "close", "destroy"]:
+        if self.action in ["start", "complete", "close", "reject", "destroy"]:
             return [IsAfterSalesOrAdmin()]
         return [IsAuthenticated()]
 
@@ -34,6 +34,7 @@ class AfterSalesRequestViewSet(viewsets.ModelViewSet):
                 | Q(order__customer__phone__icontains=keyword)
                 | Q(description__icontains=keyword)
                 | Q(solution__icontains=keyword)
+                | Q(remark__icontains=keyword)
             )
         if params.get("status"):
             statuses = [status for status in params["status"].split(",") if status]
@@ -52,7 +53,8 @@ class AfterSalesRequestViewSet(viewsets.ModelViewSet):
         after_sales.status = AfterSalesRequest.Status.PROCESSING
         after_sales.owner = request.user
         after_sales.solution = request.data.get("solution", after_sales.solution)
-        after_sales.save(update_fields=["status", "owner", "solution", "updated_at"])
+        after_sales.remark = request.data.get("remark", after_sales.remark)
+        after_sales.save(update_fields=["status", "owner", "solution", "remark", "updated_at"])
         return Response(self.get_serializer(after_sales).data)
 
     @action(detail=True, methods=["post"])
@@ -61,14 +63,20 @@ class AfterSalesRequestViewSet(viewsets.ModelViewSet):
         after_sales.status = AfterSalesRequest.Status.COMPLETED
         after_sales.owner = request.user
         after_sales.solution = request.data.get("solution", after_sales.solution)
-        after_sales.save(update_fields=["status", "owner", "solution", "updated_at"])
+        after_sales.remark = request.data.get("remark", after_sales.remark)
+        after_sales.save(update_fields=["status", "owner", "solution", "remark", "updated_at"])
         return Response(self.get_serializer(after_sales).data)
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
+        return self.reject(request, pk)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
         after_sales = self.get_object()
         after_sales.status = AfterSalesRequest.Status.CLOSED
         after_sales.owner = request.user
         after_sales.solution = request.data.get("solution", after_sales.solution)
-        after_sales.save(update_fields=["status", "owner", "solution", "updated_at"])
+        after_sales.remark = request.data.get("remark", after_sales.remark)
+        after_sales.save(update_fields=["status", "owner", "solution", "remark", "updated_at"])
         return Response(self.get_serializer(after_sales).data)

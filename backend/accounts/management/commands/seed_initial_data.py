@@ -12,7 +12,7 @@ from finance.models import InvoiceRequest
 from orders.models import DesignOption, Order, OrderItem
 from production.models import ProductionArrangement
 from stores.models import Store
-from system_settings.models import PaymentChannel
+from system_settings.models import InvoiceTypeOption, PaymentChannel
 
 
 class Command(BaseCommand):
@@ -100,6 +100,8 @@ class Command(BaseCommand):
             "stores.change_store",
             "orders.change_designoption",
             "system_settings.change_paymentchannel",
+            "system_settings.view_invoicetypeoption",
+            "system_settings.change_invoicetypeoption",
             "attachments.delete_attachment",
             "auth.view_user",
             "auth.add_user",
@@ -167,6 +169,22 @@ class Command(BaseCommand):
         PaymentChannel.objects.filter(code="platform").update(is_default=True)
         PaymentChannel.objects.exclude(code="platform").update(is_default=False)
         platform_channel = PaymentChannel.objects.get(code="platform")
+
+        invoice_types_data = [
+            ("普通13%", "normal", "13.00", 10),
+            ("专票13%", "special", "13.00", 20),
+        ]
+        for name, code, tax_rate, sort_order in invoice_types_data:
+            InvoiceTypeOption.objects.update_or_create(
+                code=code,
+                defaults={
+                    "name": name,
+                    "tax_rate": tax_rate,
+                    "sort_order": sort_order,
+                    "status": InvoiceTypeOption.Status.ENABLED,
+                    "created_by": admin,
+                },
+            )
 
         users_data = [
             ("sales01", "李销售", "销售"),

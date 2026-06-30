@@ -38,6 +38,7 @@ class InvoiceRequestSerializer(serializers.ModelSerializer):
             "title",
             "tax_number",
             "remark",
+            "approval_remark",
             "status",
             "applicant",
             "applicant_name",

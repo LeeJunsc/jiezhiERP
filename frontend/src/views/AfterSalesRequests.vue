@@ -15,10 +15,10 @@
       <el-form-item label="状态">
         <el-select v-model="filters.status" clearable placeholder="全部" style="width: 150px">
           <el-option label="待处理" value="pending_processing" />
-          <el-option label="待受理" value="pending" />
+          <el-option label="待处理" value="pending" />
           <el-option label="处理中" value="processing" />
           <el-option label="已完成" value="completed" />
-          <el-option label="已关闭" value="closed" />
+          <el-option label="已驳回" value="closed" />
         </el-select>
       </el-form-item>
       <el-form-item label="类型">
@@ -114,8 +114,8 @@
       </div>
 
       <div class="detail-section">
-        <h3>处理方案</h3>
-        <p class="pre-line">{{ current.solution || '暂无' }}</p>
+        <h3>处理备注</h3>
+        <p class="pre-line">{{ current.remark || '暂无备注' }}</p>
       </div>
 
       <div class="detail-section">
@@ -141,17 +141,16 @@
       </div>
 
       <div v-if="canHandle && ['pending', 'processing'].includes(current.status)" class="actions mobile-sticky-actions">
-        <el-button v-if="current.status === 'pending'" type="primary" @click="openHandle(current, 'start')">受理</el-button>
         <el-button type="success" @click="openHandle(current, 'complete')">完成</el-button>
-        <el-button plain @click="openHandle(current, 'close')">关闭</el-button>
+        <el-button type="danger" plain @click="openHandle(current, 'reject')">驳回</el-button>
       </div>
     </section>
   </el-drawer>
 
-  <el-dialog v-model="handleVisible" title="售后处理" width="min(520px, 94vw)">
+  <el-dialog v-model="handleVisible" :title="handleTitle" width="min(520px, 94vw)">
     <el-form label-position="top">
-      <el-form-item label="处理说明">
-        <el-input v-model="handleSolution" type="textarea" :rows="4" placeholder="填写处理方案、补发安排、退款说明等" />
+      <el-form-item label="处理备注">
+        <el-input v-model="handleRemark" type="textarea" :rows="4" placeholder="填写处理结果、沟通记录或驳回原因" />
       </el-form-item>
       <el-form-item label="处理附件">
         <el-upload
@@ -174,7 +173,7 @@
     </el-form>
     <template #footer>
       <el-button @click="handleVisible = false">取消</el-button>
-      <el-button type="primary" @click="submitHandle">确认</el-button>
+      <el-button :type="handleAction === 'reject' ? 'danger' : 'primary'" @click="submitHandle">确认</el-button>
     </template>
   </el-dialog>
 </template>
@@ -198,14 +197,15 @@ const dateRange = ref<string[]>([])
 const detailVisible = ref(false)
 const current = ref<any>(null)
 const handleVisible = ref(false)
-const handleAction = ref<'start' | 'complete' | 'close'>('start')
-const handleSolution = ref('')
+const handleAction = ref<'complete' | 'reject'>('complete')
+const handleRemark = ref('')
 const afterSalesFiles = ref<any[]>([])
 const handleFiles = ref<any[]>([])
 const afterSalesAttachments = ref<any[]>([])
 const uploadedFileUids = new Set<string>()
 const filters = reactive({ keyword: '', status: 'pending_processing', type: '' })
 const canHandle = computed(() => Boolean(auth.user?.is_superuser || auth.user?.groups?.some((group) => ['管理员', '售后'].includes(group.name))))
+const handleTitle = computed(() => (handleAction.value === 'reject' ? '驳回售后' : '完成售后'))
 
 function queryParams() {
   const statusMap: Record<string, string> = {
@@ -259,10 +259,10 @@ async function openDetail(row: any) {
   detailVisible.value = true
 }
 
-async function openHandle(row: any, action: 'start' | 'complete' | 'close') {
+async function openHandle(row: any, action: 'complete' | 'reject') {
   current.value = row
   handleAction.value = action
-  handleSolution.value = row.solution || ''
+  handleRemark.value = row.remark || ''
   handleFiles.value = []
   uploadedFileUids.clear()
   await loadAfterSalesAttachments(row.id)
@@ -297,8 +297,10 @@ async function handleAfterSalesFileChange(file: any) {
 
 async function submitHandle() {
   if (!current.value) return
-  await api.post(`/after-sales-requests/${current.value.id}/${handleAction.value}/`, { solution: handleSolution.value.trim() })
-  ElMessage.success('售后状态已更新')
+  await api.post(`/after-sales-requests/${current.value.id}/${handleAction.value}/`, {
+    remark: handleRemark.value.trim()
+  })
+  ElMessage.success(handleAction.value === 'reject' ? '售后已驳回' : '售后已完成')
   handleVisible.value = false
   detailVisible.value = false
   await load()
@@ -321,10 +323,10 @@ function typeLabel(type: string) {
 
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
-    pending: '待受理',
+    pending: '待处理',
     processing: '处理中',
     completed: '已完成',
-    closed: '已关闭'
+    closed: '已驳回'
   }
   return labels[status] || status
 }

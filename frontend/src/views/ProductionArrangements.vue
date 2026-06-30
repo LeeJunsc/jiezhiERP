@@ -106,8 +106,15 @@
               style="width: 100%"
             />
           </el-form-item>
+          <el-form-item label="生产备注">
+            <el-input
+              v-model="productionRemark"
+              type="textarea"
+              :rows="4"
+              placeholder="填写生产安排备注、代工特殊要求或处理说明"
+            />
+          </el-form-item>
         </el-form>
-        <el-input v-model="productionRemark" type="textarea" :rows="3" placeholder="填写生产安排备注、代工特殊要求或处理说明" />
         <el-upload
           v-model:file-list="productionFiles"
           action="#"

@@ -138,10 +138,22 @@ class OrderSerializer(serializers.ModelSerializer):
         if self.instance and self.instance.status == Order.Status.CANCELLED:
             return attrs
 
+        errors = {}
+        if not attrs.get("customer") and not getattr(self.instance, "customer_id", None):
+            errors["customer"] = "请选择客户。"
+        if not attrs.get("store") and not getattr(self.instance, "store_id", None):
+            errors["store"] = "请选择来源店铺。"
+        if not attrs.get("design_option") and not getattr(self.instance, "design_option_id", None):
+            errors["design_option"] = "请选择设计处理方式。"
+        if "total_amount" in attrs and attrs.get("total_amount") in [None, 0]:
+            errors["total_amount"] = "请填写订单金额。"
+
         platform_order_no = (attrs.get("platform_order_no") or getattr(self.instance, "platform_order_no", "") or "").strip()
         if not platform_order_no:
-            attrs["platform_order_no"] = ""
-            return attrs
+            errors["platform_order_no"] = "请填写平台订单号。"
+
+        if errors:
+            raise serializers.ValidationError(errors)
 
         duplicate_queryset = (
             Order.objects.filter(platform_order_no=platform_order_no)
@@ -185,6 +197,8 @@ class OrderSerializer(serializers.ModelSerializer):
         from orders.services import next_order_no
 
         items_data = validated_data.pop("items", [])
+        if not items_data:
+            raise serializers.ValidationError({"items": "请至少填写一个产品。"})
         if not validated_data.get("order_no"):
             validated_data["order_no"] = next_order_no()
         order = Order.objects.create(**validated_data)

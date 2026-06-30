@@ -89,6 +89,25 @@ class OrderFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 201)
 
+    def test_create_order_requires_core_fields(self):
+        payload = self.order_payload("")
+        payload["items"] = []
+        payload["total_amount"] = "0.00"
+
+        response = self.client.post("/api/v1/orders/", payload, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("platform_order_no", response.data)
+
+    def test_create_order_requires_product_items(self):
+        payload = self.order_payload("TB202606290003")
+        payload["items"] = []
+
+        response = self.client.post("/api/v1/orders/", payload, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("items", response.data)
+
     def test_design_confirm_creates_production_arrangement(self):
         order = self.create_order(self.need_design)
         self.client.post(f"/api/v1/orders/{order.id}/submit/")
@@ -277,21 +296,14 @@ class OrderFlowTests(TestCase):
         )
         self.assertEqual(after_sales_upload_response.status_code, 201)
 
-        start_after_sales_response = self.client.post(
-            f"/api/v1/after-sales-requests/{after_sales_id}/start/",
-            {"solution": "已受理，安排补发"},
-            format="json",
-        )
-        self.assertEqual(start_after_sales_response.status_code, 200)
-        self.assertEqual(start_after_sales_response.data["status"], AfterSalesRequest.Status.PROCESSING)
-
         complete_after_sales_response = self.client.post(
             f"/api/v1/after-sales-requests/{after_sales_id}/complete/",
-            {"solution": "已补发并完成"},
+            {"remark": "补发快递单号 SF123456"},
             format="json",
         )
         self.assertEqual(complete_after_sales_response.status_code, 200)
         self.assertEqual(complete_after_sales_response.data["status"], AfterSalesRequest.Status.COMPLETED)
+        self.assertEqual(complete_after_sales_response.data["remark"], "补发快递单号 SF123456")
 
         related_response = self.client.get(f"/api/v1/orders/{order.id}/related/")
         self.assertEqual(related_response.status_code, 200)
@@ -301,6 +313,28 @@ class OrderFlowTests(TestCase):
         self.assertEqual(len(related_response.data["invoice_requests"][0]["attachments"]), 1)
         self.assertEqual(len(related_response.data["after_sales_requests"]), 1)
         self.assertEqual(len(related_response.data["after_sales_requests"][0]["attachments"]), 1)
+        self.assertEqual(related_response.data["after_sales_requests"][0]["remark"], "补发快递单号 SF123456")
+
+    def test_reject_after_sales_request_saves_remark(self):
+        order = self.create_order(self.skip_design)
+        after_sales = AfterSalesRequest.objects.create(
+            request_no="ASTEST001",
+            order=order,
+            type=AfterSalesRequest.Type.COMPLAINT,
+            description="客户投诉包装破损",
+            created_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/v1/after-sales-requests/{after_sales.id}/reject/",
+            {"remark": "证据不足，驳回申请"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        after_sales.refresh_from_db()
+        self.assertEqual(after_sales.status, AfterSalesRequest.Status.CLOSED)
+        self.assertEqual(after_sales.remark, "证据不足，驳回申请")
         self.assertEqual(Attachment.objects.filter(business_id=order.id).count(), 0)
 
     def test_cancelled_order_cannot_be_submitted(self):

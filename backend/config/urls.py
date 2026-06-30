@@ -12,7 +12,7 @@ from finance.views import InvoiceRequestViewSet
 from orders.views import DesignOptionViewSet, OrderViewSet
 from production.views import ProductionArrangementViewSet
 from stores.views import StoreViewSet
-from system_settings.views import PaymentChannelViewSet
+from system_settings.views import InvoiceTypeOptionViewSet, PaymentChannelViewSet
 
 
 router = DefaultRouter()
@@ -26,6 +26,7 @@ router.register("design-tasks", DesignTaskViewSet, basename="design-tasks")
 router.register("production-arrangements", ProductionArrangementViewSet, basename="production-arrangements")
 router.register("attachments", AttachmentViewSet, basename="attachments")
 router.register("payment-channels", PaymentChannelViewSet, basename="payment-channels")
+router.register("invoice-type-options", InvoiceTypeOptionViewSet, basename="invoice-type-options")
 router.register("invoice-requests", InvoiceRequestViewSet, basename="invoice-requests")
 router.register("after-sales-requests", AfterSalesRequestViewSet, basename="after-sales-requests")
 

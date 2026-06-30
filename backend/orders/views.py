@@ -2,6 +2,7 @@ from django.db.models import Prefetch, Q, Sum
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -16,6 +17,7 @@ from design.serializers import DesignTaskSerializer
 from finance.models import InvoiceRequest
 from finance.serializers import InvoiceRequestSerializer
 from orders.models import DesignOption, Order
+from orders.importer import import_orders_from_xlsx
 from orders.serializers import DesignOptionSerializer, OrderListSerializer, OrderSerializer
 from orders.services import cancel_order, submit_order
 from production.serializers import ProductionArrangementSerializer
@@ -219,3 +221,19 @@ class OrderViewSet(viewsets.ModelViewSet):
                 "total_amount": str(summary["total_amount"] or "0.00"),
             }
         )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="import-spreadsheet",
+        permission_classes=[IsAdminRole],
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def import_spreadsheet(self, request):
+        uploaded_file = request.FILES.get("file")
+        if not uploaded_file:
+            return Response({"message": "请上传 Excel 文件。"}, status=400)
+        if not uploaded_file.name.lower().endswith(".xlsx"):
+            return Response({"message": "当前仅支持 .xlsx 文件。"}, status=400)
+        dry_run = str(request.data.get("dry_run", "")).lower() in ["1", "true", "yes"]
+        return Response(import_orders_from_xlsx(uploaded_file, request.user, dry_run=dry_run))
